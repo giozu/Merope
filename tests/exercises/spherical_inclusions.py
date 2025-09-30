@@ -204,15 +204,5 @@ def main():
     plt.savefig(os.path.join(results_folder, "porosity_vs_L.png"))
     plt.show()
 
-    plt.figure(figsize=(8,6))
-    plt.plot(a_vals, [r[3] for r in results], "o-", label="Mean conductivity")
-    plt.xlabel("Resolution parameter a = R_pore / L_voxel")
-    plt.ylabel("Effective conductivity K")
-    plt.grid(True)
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(os.path.join(results_folder, "convergence_a.png"))
-    plt.show()
-
 if __name__ == "__main__":
     main()
