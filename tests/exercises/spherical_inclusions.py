@@ -1,3 +1,12 @@
+"""
+spherical_inclusions.py
+
+This script builds a porous microstructure with spherical inclusions in a solid
+matrix, voxelizes it with Merope, and runs Amitex to compute the effective
+thermal conductivity tensor. Results are post-processed to extract the mean
+conductivity and off-diagonal error, providing a baseline reference case.
+"""
+
 ###############################################################
 # SCRIPT TO COMPUTE:
 #   - Effective thermal conductivity (K)
