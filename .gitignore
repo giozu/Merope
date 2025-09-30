@@ -3,3 +3,4 @@ voro-plus-plus
 INSTALL-DIR
 BUILD-DIR
 .vscode
+__pycache__
