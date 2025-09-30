@@ -25,10 +25,10 @@ from mpl_toolkits.mplot3d import Axes3D  # needed for 3D plots
 R_pore = 1.0
 porosity = 0.175
 
-L_RVE_list = [10, 15, 20, 25, 30]
-a_list     = [2, 3, 4, 5, 6]
+L_RVE_list = [10, 15, 20, 25, 30, 35]
+a_list     = [1, 2, 3, 4, 5, 6]
 
-num_vox_max = 50
+num_vox_max = 150
 
 # Materials
 k_matrix = 1.0
