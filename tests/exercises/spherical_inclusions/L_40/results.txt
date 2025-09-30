@@ -1,9 +1,0 @@
-L_RVE: 40
-N_voxel: 80
-L_1voxel: 0.500000
-a (target): 2.000
-a (realized): 2.000
-Target porosity: 0.175
-Calculated porosity: 0.186
-Kxx: 0.751489, Kyy: 0.751274, Kzz: 0.751594
-K_mean: 0.751452, Error: 6.639697e-04

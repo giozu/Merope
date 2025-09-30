@@ -15,6 +15,7 @@ import merope
 import interface_amitex_fftp.amitex_wrapper as amitex
 import interface_amitex_fftp.post_processing as amitex_out
 
+from mpl_toolkits.mplot3d import Axes3D  # needed for 3D plots
 
 # ---------------------------------------------------------------------------
 # INPUT PARAMETERS
@@ -27,7 +28,7 @@ porosity = 0.175
 L_RVE_list = [10, 15, 20, 25, 30]
 a_list     = [2, 3, 4, 5, 6]
 
-num_vox_max = 100
+num_vox_max = 50
 
 # Materials
 k_matrix = 1.0
@@ -88,6 +89,8 @@ def process_matrix(matrix):
     return k_mean, error, diag
 
 
+import csv
+
 # ---------------------------------------------------------------------------
 # MAIN
 # ---------------------------------------------------------------------------
@@ -106,7 +109,7 @@ def main():
             L_voxel = L / num_voxels
 
             if num_voxels > num_vox_max:
-                print(f"!!!  Skipping case L={L}, a={a} (N_vox={num_voxels} > 100)")
+                print(f"!!!  Skipping case L={L}, a={a} (N_vox={num_voxels} > {num_vox_max})")
                 results.append((L, a, num_voxels, L_voxel, np.nan, np.nan, np.nan))
                 continue
 
@@ -141,10 +144,31 @@ def main():
 
             os.chdir(cwd_backup)
 
+    # -------------------------------
+    # Save results (CSV + NumPy npz)
+    # -------------------------------
+    csv_path = os.path.join(results_folder, "summary_results.csv")
+    with open(csv_path, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["L_RVE", "a", "N_voxel", "L_voxel", "K_mean", "Error", "Porosity_calc"])
+        writer.writerows(results)
+    print(f"Saved CSV results to {csv_path}")
+
+    npz_path = os.path.join(results_folder, "summary_results.npz")
+
+    np.savez(npz_path,
+            results=np.array(results, dtype=float),
+            L_vals=np.array(sorted(set(r[0] for r in results)), dtype=float),
+            a_vals=np.array(sorted(set(r[1] for r in results)), dtype=float))
+
+    print(f"Saved NumPy results to {npz_path}")
+
+    # -------------------------------
     # Convert results to arrays for plotting
+    # -------------------------------
     L_vals   = sorted(set(r[0] for r in results))
     a_vals   = sorted(set(r[1] for r in results))
-    
+
     K_map = np.full((len(L_vals), len(a_vals)), np.nan)
     for r in results:
         i = L_vals.index(r[0])
@@ -153,18 +177,37 @@ def main():
 
     # Heatmap of K_mean
     plt.figure(figsize=(8,6))
-    # plt.imshow(K_map, origin="lower", aspect="auto",
-    #            extent=[min(a_vals), max(a_vals), min(L_vals), max(L_vals)],
-    #            cmap="viridis")
     plt.imshow(np.ma.masked_invalid(K_map), origin="lower", aspect="auto",
-           extent=[min(a_vals), max(a_vals), min(L_vals), max(L_vals)],
-           cmap="viridis")
+               extent=[min(a_vals), max(a_vals), min(L_vals), max(L_vals)],
+               cmap="viridis")
     plt.colorbar(label="K_mean")
     plt.xlabel("Resolution parameter a")
     plt.ylabel("RVE size L")
     plt.title("Effective conductivity map")
     plt.tight_layout()
     plt.savefig(os.path.join(results_folder, "K_map.png"))
+    plt.show()
+
+    # -------------------------------
+    # 3D surface plot of K_mean
+    # -------------------------------
+    A_grid, L_grid = np.meshgrid(a_vals, L_vals)
+
+    fig = plt.figure(figsize=(10,7))
+    ax = fig.add_subplot(111, projection="3d")
+
+    surf = ax.plot_surface(A_grid, L_grid, K_map, cmap="viridis", edgecolor="k", alpha=0.8)
+
+    ax.set_xlabel("Resolution parameter a")
+    ax.set_ylabel("RVE size L")
+    ax.set_zlabel("Effective conductivity K_mean")
+    ax.set_title("3D map of K_mean vs L_RVE and a")
+    ax.scatter(A_grid, L_grid, K_map, color="k", s=20)
+
+    fig.colorbar(surf, shrink=0.5, aspect=10, label="K_mean")
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(results_folder, "K_map_3D.png"))
     plt.show()
 
 
