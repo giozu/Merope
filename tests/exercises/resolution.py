@@ -1,5 +1,5 @@
 """
-spherical_inclusions.py
+resolution.py
 
 This script builds a porous microstructure with spherical inclusions in a solid
 matrix, voxelizes it with Merope, and runs Amitex to compute the effective
@@ -18,6 +18,7 @@ conductivity and off-diagonal error, providing a baseline reference case.
 
 import os
 import time
+import numpy as np
 from math import sqrt
 import matplotlib.pyplot as plt
 
@@ -35,11 +36,11 @@ import interface_amitex_fftp.post_processing as amitex_out
 porosity = 0.175
 R_pore = 1.0 # so that the ratio L_RVE / R_pore is just L_RVE
 
-resolution = 2 # target_resolution --> L_1voxel = R_pore / 4
+L_RVE = 10
 
 seed = 0
 
-L_RVE = [10, 15, 20, 25, 30, 35, 40, 45]  # edge lengths of the RVE
+a_list = [1, 2, 3, 4, 5, 6]
 
 # materials
 k_matrix = 1.0
@@ -47,7 +48,7 @@ k_gas = 1e-3
 conductivities = [k_matrix, k_gas]
 
 # results folder
-results_folder = "spherical_inclusions"
+results_folder = "resolution"
 
 if not os.path.exists(results_folder):
     os.makedirs(results_folder)
@@ -117,20 +118,18 @@ def process_matrix(matrix):
 # ---------------------------------------------------------------------------
 def main():
     results = []
-    for L in L_RVE:
-        print(f"\n=== Running for L = {L} ===")
+    for a in a_list:
+        print(f"\n=== Running for a = {a} ===")
 
-        num_voxels = int(resolution * L / R_pore)
+        # number of voxels from resolution
+        num_voxels = int(a * L_RVE / R_pore)
         voxellation = [num_voxels]*3
 
-        L_voxel = L / num_voxels
-        a_param = R_pore / L_voxel   # should be ≈ resolution
+        L_voxel = L_RVE / num_voxels
+        a_real = R_pore / L_voxel
 
-        if abs(a_param - resolution) > 1e-6:
-            print(f"Warning: adjusted a={a_param:.3f} instead of {resolution}")
-
-        # create folder for each L
-        case_folder = os.path.join(results_folder, f"L_{L}")
+        # create folder for each a
+        case_folder = os.path.join(results_folder, f"a_{a}")
         if not os.path.exists(case_folder):
             os.mkdir(case_folder)
 
@@ -139,7 +138,7 @@ def main():
         os.chdir(case_folder)
 
         porosity_calc = build_voxelized_structure(
-            [L, L, L], seed, R_pore, porosity, conductivities, voxellation
+            [L_RVE, L_RVE, L_RVE], seed, R_pore, porosity, conductivities, voxellation
         )
 
         matrix = read_conductivity_matrix() if run_amitex() else None
@@ -148,60 +147,61 @@ def main():
             # conductivity
             k_mean, error, diag = process_matrix(matrix)
 
-            results.append((L, L_voxel, a_param, k_mean, error, porosity_calc))
+            results.append((a_real, k_mean, error, porosity_calc))
 
             with open("results.txt", "w") as f:
-                f.write(f"L_RVE: {L}\n")
+                f.write(f"L_RVE: {L_RVE}\n")
+                f.write(f"R_pore: {R_pore}\n")
                 f.write(f"N_voxel: {num_voxels}\n")
                 f.write(f"L_1voxel: {L_voxel:.6f}\n")
-                f.write(f"a (target): {resolution:.3f}\n")
-                f.write(f"a (realized): {a_param:.3f}\n")
+                f.write(f"a (target): {a}\n")
+                f.write(f"a (realized): {a_real:.3f}\n")
                 f.write(f"Target porosity: {porosity:.3f}\n")
                 f.write(f"Calculated porosity: {porosity_calc:.3f}\n")
                 f.write(f"Kxx: {diag[0]:.6f}, Kyy: {diag[1]:.6f}, Kzz: {diag[2]:.6f}\n")
-                f.write(f"K_mean: {k_mean:.6f}, Error: {error:.6e}\n")
+                f.write(f"K_mean: {k_mean:.6f}\n")
+                f.write(f"Error: {error:.6e}")
 
-            print(f"Results for L={L} stored (target φ={porosity:.3f}, calc φ={porosity_calc:.3f})")
+            print(f"Results stored for a={a} (φ_calc={porosity_calc:.3f})")
 
         os.chdir(cwd_backup)
 
-    # plot results
-    L_vals   = [r[0] for r in results]
-    a_vals   = [r[2] for r in results]
-    k_vals   = [r[3] for r in results]
-    err_vals = [r[4] for r in results]
-    phi_vals = [r[5] for r in results]
+    # Plot K_eff vs a
+    a_vals   = [r[0] for r in results]
+    k_vals   = [r[1] for r in results]
+    err_vals = [r[2] for r in results]
+    phi_vals = [r[3] for r in results]
 
     plt.figure(figsize=(8,6))
-    plt.plot(L_vals, k_vals, "o-", label="Mean conductivity")
-    plt.xlabel("L_{RVE} / R")
+    plt.plot(a_vals, k_vals, "o-", label="Mean conductivity")
+    plt.xlabel("Resolution parameter a = R_pore / L_voxel")
     plt.ylabel("Effective conductivity K")
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
-    plt.savefig(os.path.join(results_folder, "convergence_L.png"))
+    plt.savefig(os.path.join(results_folder, "k_vs_a.png"))
     plt.show()
 
     plt.figure(figsize=(8,6))
-    plt.plot(L_vals, err_vals, "s--", color="red", label="Off-diagonal error")
-    plt.xlabel("RVE size L")
+    plt.plot(a_vals, err_vals, "s--", color="red", label="Off-diagonal error")
+    plt.xlabel("Resolution parameter a")
     plt.ylabel("Error (anisotropy measure)")
     plt.yscale("log")
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
-    plt.savefig(os.path.join(results_folder, "anisotropy_error.png"))
+    plt.savefig(os.path.join(results_folder, "error_vs_a.png"))
     plt.show()
 
     plt.figure(figsize=(8,6))
-    plt.plot(L_vals, phi_vals, "d-", color="green", label="Calculated porosity")
+    plt.plot(a_vals, phi_vals, "d-", color="green", label="Calculated porosity")
     plt.axhline(porosity, color="black", linestyle="--", label="Target porosity")
-    plt.xlabel("RVE size L")
+    plt.xlabel("Resolution parameter a")
     plt.ylabel("Porosity")
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
-    plt.savefig(os.path.join(results_folder, "porosity_vs_L.png"))
+    plt.savefig(os.path.join(results_folder, "porosity_vs_a.png"))
     plt.show()
 
 if __name__ == "__main__":
