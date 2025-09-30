@@ -1,12 +1,11 @@
 ###############################################################
-
-### FILE USED TO CLAC K VS POROSITY,DELTA,GRAINS VOL ###
-
+# SCRIPT TO COMPUTE:
+#   - Effective thermal conductivity (K)
+#   - Porosity
+#   - Effect of grain aspect ratio and boundary layer thickness
+#
+# NOTE: Phase 1 is the porous phase
 ###############################################################
-
-## N:B PHASE 1 IS THE POROUS PHASE ##
-
-# BISOGNA OTTIMIZZARE VOLUME GRANI #
 
 import os
 import sac_de_billes
@@ -18,218 +17,243 @@ import archi_merope as arch
 import interface_amitex_fftp.amitex_wrapper as amitex
 import interface_amitex_fftp.post_processing as amitex_out
 
+use_amitex = True  # set to True if you want to run Amitex
 
+# ---------------------------------------------------------------------------
+# VOXEL & CELL INPUTS
+# ---------------------------------------------------------------------------
 
-# Voxel & Cell INPUTS #
+domain_size = [10, 10, 10]     # RVE dimensions
+RVE_size = domain_size[1]      # reference RVE size
+num_voxels = 100               # voxel resolution → grid = 100³
+random_seed = 0                # base random seed
+num_seeds = 1                  # number of seeds for statistical variability
 
-L = [10, 10, 10]
-RVEsize = L[1]
-n3D = 100
-seed = 0
-NbSeed = 1 #Number of calculations with the same physical quantities but duffrent randomness alghoritm (seed)
 voxel_rule = merope.vox.VoxelRule.Average
-homogRule = merope.HomogenizationRule.Voigt  ## If i want to use homogRule, voxel_rule must be = merope.vox.VoxelRule.Average
+homog_rule = merope.HomogenizationRule.Voigt  # requires voxel_rule = Average
 
 
-# Names of folders that will contain results #
+# ---------------------------------------------------------------------------
+# FOLDERS AND OUTPUT FILES
+# ---------------------------------------------------------------------------
 
-folder_name = 'Result' #nome della cartella che conterrà i risultati
-folder_path = os.path.join("/home/giovanni/nuclear/merope/tests/mattiuz", folder_name)
-file_output_path = "Porosity_conduct_results.txt"
+results_folder = "Result"  
+results_path = os.path.join(os.getcwd(), results_folder)
 
-    
-vtkname = "crack_structure.vtk"
-fileCoeff = "Coeffs.txt"
-
-### EQUAL FILES PARAMETERS FOR THE DETERMINATION OF ALPHA BETA GAMMA PARAMETERS ###
-
-inclR = 0.3 # POSSIBLE INPUT to determine K
-
-lagR = 3 # Parameter to determine the grains volumes
-lagPhi = 1 # Must be 1 to fill the entire RVE with solid matrix before putting porosities
+raw_output_file = "Porosity_conduct_results.txt"
+vtk_filename = "crack_structure.vtk"
+coeff_filename = "Coeffs.txt"
 
 
-# MATERIAL INPUTS #
+# ---------------------------------------------------------------------------
+# MICROSTRUCTURE PARAMETERS
+# ---------------------------------------------------------------------------
 
-##############
-aspRatio2 = np.linspace(1, 0.1, 20)
-#inclPhi = np.arange(0.05, 0.56, 0.1)  # Used to determine porosity
-inclPhi = np.linspace(0.1, 0.2, 2)
-delta = 1 # thickness of layer POSSIBLE INPUT
-delta_ratio = delta/lagR
-##############
+inclusion_radius = 0.3     # radius of spherical inclusions (pores)
+grain_size = 3             # mean grain size parameter
+grain_fill_fraction = 1    # must be 1 to fully fill RVE with grains
 
+# Aspect ratio variation (anisotropy of grains)
+aspect_ratios_y = np.linspace(1, 0.1, 2)   # y-axis aspect ratios
 
+# porosity fractions to investigate
+inclusion_fractions = np.linspace(0.1, 0.2, 2)
 
+boundary_thickness = 1     # boundary layer thickness
+boundary_to_grain_ratio = boundary_thickness / grain_size
 
-inclRphi = [inclR, inclPhi]
-lagRphi = [lagR, lagPhi]
-
-
-
-incl_phase = 2 # 0
-delta_phase = 3 # 1
-grains_phase = 0 # 2
+# Pack grain parameters for Merope
+grain_params = [grain_size, grain_fill_fraction]
 
 
-Kmatrix = 1  #thermal conductivity of the matrix
-Kgases = 1e-03  #thermal conductivity of gases in pore
+# ---------------------------------------------------------------------------
+# PHASE DEFINITIONS
+# ---------------------------------------------------------------------------
 
-K = [Kmatrix, Kmatrix, Kgases]
+phase_pores = 2
+phase_boundary = 3
+phase_grains = 0
 
-def Crack_structure_Voxellation(n3D, L, seed, inclR, inclPhi, lagRphi, aspRatio2, incl_phase, grains_phase, delta_phase, delta, voxel_rule, K, vtkname, fileCoeff):
-    
-    ### Add the spherical inclusions 
-    sphIncl2 = merope.SphereInclusions_3D()
-    sphIncl2.setLength(L)
-    sphIncl2.fromHisto(seed, sac_de_billes.TypeAlgo.BOOL, 0., [[inclR, inclPhi]], [incl_phase])
+# thermal conductivities
+k_matrix = 1.0
+k_gas = 1e-3
+conductivities = [k_matrix, k_matrix, k_gas]
 
-    multiInclusions2 = merope.MultiInclusions_3D()
-    multiInclusions2.setInclusions(sphIncl2)
-       
-    ### Laguerre
-    sphIncl = merope.SphereInclusions_3D()
-    sphIncl.setLength(L)
-    sphIncl.fromHisto(seed, sac_de_billes.TypeAlgo.RSA, 0., [lagRphi], [1])
 
-    polyCrystal = merope.LaguerreTess_3D(L, sphIncl.getSpheres())
-    
-    
-    aspRatio1 = 1
-    aspRatio3 = 1/(aspRatio1*aspRatio2)
-    polyCrystal.setAspRatio([aspRatio1, aspRatio2, aspRatio3])
-    
-    
-    multiInclusions = merope.MultiInclusions_3D()
-    multiInclusions.setInclusions(polyCrystal)
-    N = len(multiInclusions.getAllIdentifiers())
-    multiInclusions.addLayer(multiInclusions.getAllIdentifiers(), delta_phase, delta) # addLayer(identifiers, newPhase, width)
-    multiInclusions.changePhase(multiInclusions.getAllIdentifiers(), [1 for i in multiInclusions.getAllIdentifiers()])
-    
-    ### Final structureGet the polyCrystal
-    structure1 = merope.Structure_3D(multiInclusions)
-    structure2 = merope.Structure_3D(multiInclusions2)
-    phase = [N]
-    dictionnaire = { incl_phase:grains_phase , delta_phase: grains_phase} # {2:3} dice che le sfere dentro i bordi diventano pori
-    #dictionnaire = {delta_phase: delta_phase + 1, incl_phase: grains_phase}
-    
-    structure = merope.Structure_3D(multiInclusions2, multiInclusions, dictionnaire)
-    ## PHASE 1 OF THE SECOND STRUCTURE ACTIVATES THE MASK ##
-    
-    ### Voxellation
-    gridParameters = merope.vox.create_grid_parameters_N_L_3D([n3D,n3D,n3D], L)
-    grid = merope.vox.GridRepresentation_3D(structure, gridParameters, voxel_rule)
+# ---------------------------------------------------------------------------
+# FUNCTION: Build and voxelize structure
+# ---------------------------------------------------------------------------
+
+def build_voxelized_structure(
+    num_voxels, domain_size, seed, inclusion_radius, inclusion_fraction,
+    grain_params, aspect_ratio_y, phase_pores, phase_grains,
+    phase_boundary, boundary_thickness, voxel_rule, conductivities,
+    vtk_filename, coeff_filename
+):
+    """
+    Build a polycrystal structure with inclusions and boundary layer,
+    voxelize it, and return porosity fraction.
+    """
+
+    # Step 1. Add spherical inclusions (pores)
+    sphere_inclusions = merope.SphereInclusions_3D()
+    sphere_inclusions.setLength(domain_size)
+    sphere_inclusions.fromHisto(seed, sac_de_billes.TypeAlgo.BOOL, 0., [[inclusion_radius, inclusion_fraction]], [phase_pores])
+    multi_inclusions_pores = merope.MultiInclusions_3D()
+    multi_inclusions_pores.setInclusions(sphere_inclusions)
+
+    # Step 2. Build Laguerre tessellation (grains)
+    sphere_for_laguerre = merope.SphereInclusions_3D()
+    sphere_for_laguerre.setLength(domain_size)
+    sphere_for_laguerre.fromHisto(seed, sac_de_billes.TypeAlgo.RSA, 0., [grain_params], [1])
+
+    polycrystal = merope.LaguerreTess_3D(domain_size, sphere_for_laguerre.getSpheres())
+
+    # Apply anisotropy (aspect ratio along y-axis)
+    aspect_ratio_x = 1
+    aspect_ratio_z = 1 / (aspect_ratio_x * aspect_ratio_y)
+    polycrystal.setAspRatio([aspect_ratio_x, aspect_ratio_y, aspect_ratio_z])
+
+    multi_inclusions_grains = merope.MultiInclusions_3D()
+    multi_inclusions_grains.setInclusions(polycrystal)
+
+    # Add boundary layer (delta)
+    multi_inclusions_grains.addLayer(multi_inclusions_grains.getAllIdentifiers(), phase_boundary, boundary_thickness)
+    multi_inclusions_grains.changePhase(
+        multi_inclusions_grains.getAllIdentifiers(), [1 for _ in multi_inclusions_grains.getAllIdentifiers()]
+    )
+
+    # Step 3. Combine structures
+    phase_map = {phase_pores: phase_grains, phase_boundary: phase_grains}
+    structure = merope.Structure_3D(multi_inclusions_pores, multi_inclusions_grains, phase_map)
+
+    # Step 4. Voxelization
+    grid_params = merope.vox.create_grid_parameters_N_L_3D([num_voxels, num_voxels, num_voxels], domain_size)
+    grid = merope.vox.GridRepresentation_3D(structure, grid_params, voxel_rule)
+
     analyzer = merope.vox.GridAnalyzer_3D()
-    phases_fracts = analyzer.compute_percentages(grid)
+    phase_fractions = analyzer.compute_percentages(grid)
     analyzer.print_percentages(grid)
-    grid.apply_homogRule(homogRule, K)
-    #allPhases = structure.getAllPhases()
-    #grid.apply_coefficients(K)
-    #my_printer.printVTK(grid, vtkname, nameValue = "Materialid")
-    my_printer = merope.vox.vtk_printer_3D()
-    my_printer.printVTK_segmented(grid, vtkname, fileCoeff, nameValue = "MaterialId")
-    
-    # I extrapolate the porosity
-    porosity = phases_fracts[2]
+
+    # Apply homogenization
+    grid.apply_homogRule(homog_rule, conductivities)
+
+    # Export vtk
+    printer = merope.vox.vtk_printer_3D()
+    printer.printVTK_segmented(grid, vtk_filename, coeff_filename, nameValue="MaterialId")
+
+    # porosity fraction = fraction of pores
+    porosity = phase_fractions[phase_pores]
     return porosity
 
-### function to calculate the thermal conductivity
 
-def ThermalAmitex():
-    number_of_processors = 6                   # for parallel computing
-    voxellation_of_zones = vtkname
-    amitex.computeThermalCoeff(voxellation_of_zones, number_of_processors)
-    homogenized_matrix = amitex_out.printThermalCoeff(".")
-    
-    
-    
-    
-    # Funzione per estrarre e scrivere i valori di conduttività nel file di output
-def scrivi_valori_su_file(file_output, valori, porosity, ratio, seed):
-    media = sum(valori) / len(valori)
-    num_decimali = len(str(valori[0]).split('.')[1]) if '.' in str(valori[0]) else 0
-    media_formattata = f"{media:.{num_decimali}f}"
-    with open(file_output, 'a') as f:
-        linea = f"Porosity_{porosity:.2f}\taspRatio2_{ratio}\tSeed_{seed}\t{valori[0]}\t{valori[1]}\t{valori[2]}\t{media_formattata}\n"
-        f.write(linea)
+# ---------------------------------------------------------------------------
+# FUNCTION: Run Amitex
+# ---------------------------------------------------------------------------
 
-# Funzione per leggere la matrice dal file thermalCoeff_amitex.txt
-def leggi_matrice_da_file(file_path):
-    with open(file_path, 'r') as f:
-        matrice = [list(map(float, line.split())) for line in f.readlines()]
-    return matrice
+def run_amitex():
+    """Run Amitex solver and return homogenized conductivity matrix"""
+    num_procs = 6
+    amitex.computeThermalCoeff(vtk_filename, num_procs)
+    return amitex_out.printThermalCoeff(".")
 
-# Funzione per estrarre i valori principali (diagonale principale) dalla matrice
-def estrai_valori_principali(matrice):
-    return [matrice[i][i] for i in range(3)]
 
-# Funzione per aggiornare il file aggregato con i risultati di ogni singolo file di conduttività
-def aggiorna_file_aggregato(file_aggregato, porosity, ratio, seed, valori, inclR, lagR, RVEsize, n3D, Kmatrix, Kgases):
-    media = sum(valori) / len(valori)
-    num_decimali = len(str(valori[0]).split('.')[1]) if '.' in str(valori[0]) else 0
-    media_formattata = float(f"{media:.{num_decimali}f}")  # Converti media_formattata in float
-    
-    # Se il file non esiste, crea l'intestazione e scrivi i parametri di input
-    if not os.path.exists(file_aggregato):
-        with open(file_aggregato, 'w') as f:
+# ---------------------------------------------------------------------------
+# UTILITIES
+# ---------------------------------------------------------------------------
+
+def write_values_to_file(file_output, values, porosity, aspect_ratio, seed):
+    """Write conductivity values (xx, yy, zz, mean) to file"""
+    mean_val = sum(values) / len(values)
+    with open(file_output, "a") as f:
+        f.write(
+            f"Porosity_{porosity:.2f}\tAspectRatioY_{aspect_ratio:.2f}\tSeed_{seed}\t"
+            f"{values[0]:.4f}\t{values[1]:.4f}\t{values[2]:.4f}\t{mean_val:.4f}\n"
+        )
+
+
+def read_matrix_from_file(file_path):
+    """Read conductivity matrix from Amitex output file"""
+    with open(file_path, "r") as f:
+        return [list(map(float, line.split())) for line in f.readlines()]
+
+
+def extract_diagonal_values(matrix):
+    """Extract diagonal values (Kxx, Kyy, Kzz)"""
+    return [matrix[i][i] for i in range(3)]
+
+
+def update_aggregated_file(file_aggregated, porosity, aspect_ratio, seed, values,
+                           inclusion_radius, grain_size, RVE_size, num_voxels, k_matrix, k_gas):
+    """Append results and metadata to aggregated output file"""
+    mean_val = sum(values) / len(values)
+
+    if not os.path.exists(file_aggregated):
+        # create file and write header
+        with open(file_aggregated, "w") as f:
             f.write("Input Parameters:\n")
-            f.write(f"Delta: {delta}\n")
-            f.write(f"size RVE: {RVEsize}\n")
-            f.write(f"INclusions radius: {inclR}\n")
-            f.write(f"Mean grains size: {lagR}\n")
-            f.write(f"NVoxel: {n3D}\n")
-            f.write(f"Kmatrix: {Kmatrix}\n")
-            f.write(f"Kgases: {Kgases}\n")
-            f.write("Porosity\taspRatio2\tSeed_index\tK_xx\tK_yy\tK_zz\tK_mean\n")  # Intestazione delle colonne
+            f.write(f"Boundary thickness: {boundary_thickness}\n")
+            f.write(f"RVE size: {RVE_size}\n")
+            f.write(f"Inclusion radius: {inclusion_radius}\n")
+            f.write(f"Mean grain size: {grain_size}\n")
+            f.write(f"Voxel grid: {num_voxels}\n")
+            f.write(f"Kmatrix: {k_matrix}\n")
+            f.write(f"Kgases: {k_gas}\n")
+            f.write("Porosity\tAspectRatioY\tSeed\tK_xx\tK_yy\tK_zz\tK_mean\n")
 
-    # Aggiungi i risultati
-    with open(file_aggregato, 'a') as f:
-        linea = f"{porosity:.4f}\t{ratio:.2f}\t{seed}\t{valori[0]:.4f}\t{valori[1]:.4f}\t{valori[2]:.4f}\t{media_formattata:.4f}\n"
-        f.write(linea)
+    with open(file_aggregated, "a") as f:
+        f.write(
+            f"{porosity:.4f}\t{aspect_ratio:.2f}\t{seed}\t"
+            f"{values[0]:.4f}\t{values[1]:.4f}\t{values[2]:.4f}\t{mean_val:.4f}\n"
+        )
 
-# Funzione principale per generare strutture e salvare i risultati
+# ---------------------------------------------------------------------------
+# MAIN LOOP
+# ---------------------------------------------------------------------------
+
 def main():
-    file_aggregato = os.path.join(folder_path, "aggregated_results.txt")
+    # reset raw output file
+    if os.path.exists(raw_output_file):
+        open(raw_output_file, "w").close()
 
-    if os.path.exists(file_output_path):
-        open(file_output_path, 'w').close()
+    # remove/create main results folder
+    if os.path.exists(results_folder):
+        shutil.rmtree(results_folder)
+    os.mkdir(results_folder)
+    os.chdir(results_folder)
 
-    # Crea la cartella principale 'Result' solo una volta
-    if os.path.exists(folder_name):
-        shutil.rmtree(folder_name)
-    os.mkdir(folder_name)  # Creiamo la cartella 'Result' una sola volta
-    os.chdir(folder_name)  # Entra nella cartella 'Result'
+    aggregated_file = os.path.join(os.getcwd(), "aggregated_results.txt")
 
-    # Inizializza il valore della porosità
-    for phi in inclPhi:
-        for ratio in aspRatio2:
-            for seed in range(NbSeed):
-                seed_folder = f'Seed_{seed}'  # Nome della cartella per ogni seed
-                if not os.path.exists(seed_folder):
-                    os.mkdir(seed_folder)  # Crea la cartella per il seed
-                os.chdir(seed_folder)  # Entra nella cartella per il seed
+    # loop over porosity, aspect ratio, seeds
+    for inclusion_fraction in inclusion_fractions:
+        for aspect_ratio_y in aspect_ratios_y:
+            for seed in range(num_seeds):
+                seed_folder = f"Seed_{seed}"
+                os.makedirs(seed_folder, exist_ok=True)
+                os.chdir(seed_folder)
 
-                # Calcola la porosità
-                porosity = Crack_structure_Voxellation(
-                    n3D, L, seed, inclR, phi, lagRphi, ratio, incl_phase, grains_phase,
-                    delta_phase, delta, voxel_rule, K, vtkname, fileCoeff
+                # build structure and compute porosity
+                porosity = build_voxelized_structure(
+                    num_voxels, domain_size, seed, inclusion_radius, inclusion_fraction,
+                    grain_params, aspect_ratio_y, phase_pores, phase_grains,
+                    phase_boundary, boundary_thickness, voxel_rule,
+                    conductivities, vtk_filename, coeff_filename
                 )
 
-                ThermalAmitex()  # Calcola la conduttività termica
+                if use_amitex:
+                    run_amitex()
+                    matrix = read_matrix_from_file("thermalCoeff_amitex.txt")
+                    diag_values = extract_diagonal_values(matrix)
 
-                # Estrai e salva i dati di conduttività
-                matrice = leggi_matrice_da_file("thermalCoeff_amitex.txt")
-                valori_estratti = estrai_valori_principali(matrice)
-                scrivi_valori_su_file(file_output_path, valori_estratti, porosity, ratio, seed)
+                    write_values_to_file(raw_output_file, diag_values, porosity, aspect_ratio_y, seed)
+                    update_aggregated_file(
+                        aggregated_file, porosity, aspect_ratio_y, seed, diag_values,
+                        inclusion_radius, grain_size, RVE_size, num_voxels, k_matrix, k_gas
+                    )
 
-                # Aggiungi i risultati al file aggregato
-                aggiorna_file_aggregato(file_aggregato, porosity, ratio, seed, valori_estratti, inclR, lagR, RVEsize, n3D, Kmatrix, Kgases)
+                os.chdir("..")  # back to Result/
 
-                os.chdir("../")  # Torna alla cartella del seed
-
-    os.chdir("../")  # Torna alla cartella principale 'Result'
+    os.chdir("..")  # back to base dir
 
 if __name__ == "__main__":
     main()
-
-
