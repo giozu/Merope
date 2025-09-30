@@ -38,7 +38,7 @@ homogRule = merope.HomogenizationRule.Voigt
 
 folder_name = 'results_2_rad_mixed_gen_0' # folder where results will be stored
 
-vtkname = "crack_structure.vtk"           # voxelized structure output
+vtkname = "Zone.vtk"           # voxelized structure output
 fileCoeff = "Coeffs.txt"                  # material coefficients output
 
 def go_to_dir(name_dir):

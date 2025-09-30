@@ -39,7 +39,7 @@ def go_to_dir(name_dir):
     print(name_dir)
     
     
-vtkname = "crack_structure.vtk"
+vtkname = "Zone.vtk"
 fileCoeff = "Coeffs.txt"
 
 

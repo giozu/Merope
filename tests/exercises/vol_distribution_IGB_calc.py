@@ -47,7 +47,7 @@ def go_to_dir(name_dir):
     print(name_dir)
     time.sleep(0.1)
     
-vtkname = "crack_structure.vtk"
+vtkname = "Zone.vtk"
 fileCoeff = "Coeffs.txt"
 
 tic0 = time.time()

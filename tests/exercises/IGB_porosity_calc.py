@@ -38,7 +38,7 @@ folder_path = os.path.join("/home/giovanni/nuclear/merope/tests/mattiuz/", folde
 file_output_path = "Porosity_conduct_results.txt"
 
     
-vtkname = "crack_structure.vtk"
+vtkname = "Zone.vtk"
 fileCoeff = "Coeffs.txt"
 
 

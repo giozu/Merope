@@ -41,7 +41,7 @@ results_folder = "Result"
 results_path = os.path.join(os.getcwd(), results_folder)
 
 raw_output_file = "Porosity_conduct_results.txt"
-vtk_filename = "crack_structure.vtk"
+vtk_filename = "Zone.vtk"
 coeff_filename = "Coeffs.txt"
 
 

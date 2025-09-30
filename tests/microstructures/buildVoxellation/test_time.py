@@ -22,7 +22,7 @@ with open("time.txt", "w") as fic:
     fic.write("\n")
     tic_0 = time.time()
 
-    import Thermal_tmfft
-    fic.write(str(time.time()-tic_0))
-    fic.write("\n")
-    tic_0 = time.time()
+    # import Thermal_tmfft
+    # fic.write(str(time.time()-tic_0))
+    # fic.write("\n")
+    # tic_0 = time.time()

@@ -38,7 +38,7 @@ folder_path = os.path.join("/home/giovanni/nuclear/merope/tests/mattiuz", folder
 file_output_path = "Porosity_conduct_results.txt"
 
     
-vtkname = "crack_structure.vtk"
+vtkname = "Zone.vtk"
 fileCoeff = "Coeffs.txt"
 
 ### EQUAL FILES PARAMETERS FOR THE DETERMINATION OF ALPHA BETA GAMMA PARAMETERS ###
