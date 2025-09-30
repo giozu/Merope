@@ -1,7 +1,5 @@
 # Install
 
-See [cea_install.md](https://www-git-cad.intra.cea.fr/DEC/pleiades/merope/merope_nucleaire/-/blob/master/doc/CEA_install.md) for installation in the CEA.
-
 ## Stand-alone installation of sac_de_billes
 
 The module sac_de_billes can be installed alone. See folder [AlgoPacking](modules/AlgoPacking) and documentation therein.
@@ -31,18 +29,6 @@ Moreover, for running, Mérope can be used in combination with the following app
 - MFront.
 
 ## Installation
-
-- get the Mérope repository :  
-`git clone https://www-git-cad.intra.cea.fr/DEC/pleiades/merope/merope_bibliotheque`
-
-### At the CEA
-- get associated projects/prerequisites :  
-`bash Installation/Pre-install.sh`  
-:warning: all the loadings should be done successfully (**no password error**), otherwise, it should be redone.
-- install :  
-`bash Installation/Procedure_install_Merope.sh`
-
-:warning: On the personal Ubuntu machines, the package [https://packages.ubuntu.com/jammy/libomp-dev](https://packages.ubuntu.com/jammy/libomp-dev) should be downladed first.
 
 ### From outside the CEA
 - get associated projects/prerequisites :  

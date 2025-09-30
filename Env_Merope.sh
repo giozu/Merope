@@ -26,26 +26,8 @@ export PATH=$PATH:${SCRIPT_PATH}/scripts
 export PYTHONPATH=${SCRIPT_PATH}/tools/python/:$PYTHONPATH
 
 # 2) Source AMITEX-FFTP and/or TMFFT
-if [[ "${HOSTNAME}" == *"pleiades"* ]]
-then
-    release=$(lsb_release -c |awk '{print $2}')
-    processor=$(uname -m)
-    version=$release/$processor
-    ### use TMFFT
-    export LD_LIBRARY_PATH=/soft/pleiades/testing/BUILDS/PLEIADES-trunk/PREREQUIS/$version/BOOST/lib:$LD_LIBRARY_PATH
-##    TMFFT_INSTALL=/soft/pleiades/testing/BUILDS/TMFFT-master/$version
-    TMFFT_INSTALL=/soft/pleiades/testing/BUILDS/TMFFT-trunk/$version
-
-    export PYTHONPATH=$TMFFT_INSTALL/lib/python3.7m/site-packages:$PYTHONPATH
-    export LD_LIBRARY_PATH=$TMFFT_INSTALL/lib:$LD_LIBRARY_PATH
-    export PATH=$PATH:$TMFFT_INSTALL/bin
-
-    ### use amitex_fftp
-    AMITEX_FOLDER=/soft/pleiades/testing/BUILDS/AMITEX_FFTP/${version}/amitex_fftp-v8.17.8
-else
-    # FILL IN
-    AMITEX_FOLDER=/usr/lib/amitex_fft-v8.17.8
-fi
+# AMITEX_FOLDER=/usr/lib/amitex_fft-v8.17.8
+AMITEX_FOLDER=/usr/lib/amitex_fftp-v8.17.14
 
 ### use amitex_fftp
 export PATH=${AMITEX_FOLDER}/libAmitex/bin:$PATH
