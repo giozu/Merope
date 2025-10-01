@@ -17,12 +17,12 @@ from utils_microstructure import (
 # a_values = [0.01, 0.1, 0.2, 0.3, 0.4, 0.6, 0.8, 1, 2, 3, 4, 5, 6]   # different resolutions to test
 a_values = [4]
 
-R_pore_values = [1.0, 2.0, 3.0]   # pore radii to test
+R_pore_values = [1.0]   # pore radii to test
 ratio = 25 # L_RVE / R_pore = 25
 
 seed = 0
 
-porosity_values = [0.1, 0.2, 0.3]  # porosity to test 
+porosity_values = [0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3]  # porosity to test 
 
 # Materials
 k_matrix = 1.0
@@ -32,7 +32,7 @@ conductivities = [k_matrix, k_gas]
 # Results folder
 # results_folder = "thermal_conductivity_calculator" + str(porosity).replace(".", "_")
 # results_folder = "thermal_conductivity_radius" + str(porosity).replace(".", "_")
-results_folder = "thermal_conductivity_porosity"
+results_folder = "k_eff_porosity"
 
 os.makedirs(results_folder, exist_ok=True)
 
@@ -69,7 +69,6 @@ def main():
                 voxellation = [num_voxels] * 3
 
                 print(f"\n=== Running porosity={porosity}, R_pore={R_pore}, a={a}, N_voxel={num_voxels} ===")
-
 
                 for rule_name, rule in homog_rules.items():
                     print(f"--- Homogenization rule: {rule_name} ---")
