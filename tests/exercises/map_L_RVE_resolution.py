@@ -21,12 +21,12 @@ import interface_amitex_fftp.post_processing as amitex_out
 
 # Geometry
 R_pore = 1.0
-porosity = 0.175
+porosity = 0.10
 
 L_RVE_list = [10, 15, 20, 25, 30, 35]
 a_list     = [1, 2, 3, 4, 5, 6]
 
-num_vox_max = 150
+num_vox_max = 100
 
 # Materials
 k_matrix = 1.0
@@ -47,6 +47,9 @@ os.makedirs(results_folder, exist_ok=True)
 # ---------------------------------------------------------------------------
 
 def build_voxelized_structure(domain_size, seed, radius, porosity, conductivities, voxellation):
+    """Generate a voxelized microstructure with spherical inclusions"""
+
+    # Step 1. Spherical inclusions
     sph = merope.SphereInclusions_3D()
     sph.setLength(domain_size)
     sph.fromHisto(seed, sac_de_billes.TypeAlgo.RSA, 0., [[radius, porosity]], [1])
@@ -54,10 +57,16 @@ def build_voxelized_structure(domain_size, seed, radius, porosity, conductivitie
     multi = merope.MultiInclusions_3D()
     multi.setInclusions(sph)
 
+    # Step 2. Create Structure
     structure = merope.Structure_3D(multi)
+
+    # Step 3. Create grid parameters
     grid_params = merope.vox.create_grid_parameters_N_L_3D(voxellation, domain_size)
+
+    # Step 4. Build grid
     grid = merope.vox.GridRepresentation_3D(structure, grid_params, merope.vox.VoxelRule.Average)
 
+    # Step 5. Analyze phase fractions (porosity is phase 1 here)
     analyzer = merope.vox.GridAnalyzer_3D()
     porosity_calc = analyzer.compute_percentages(grid)[1]
 

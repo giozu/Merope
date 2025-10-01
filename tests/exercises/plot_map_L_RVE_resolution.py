@@ -15,7 +15,8 @@ from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 # LOAD RESULTS
 # ---------------------------------------------------------------------------
 
-results_folder = "map_L_RVE_resolution_p0_175"
+target_porosity = 0.1
+results_folder = "map_L_RVE_resolution_p0_1"
 npz_path = os.path.join(results_folder, "summary_results.npz")
 
 data = np.load(npz_path, allow_pickle=True)
@@ -192,7 +193,7 @@ for i, L in enumerate(L_vals):
 
     plt.plot(a_sorted, P_sorted, marker="o", label=f"L_RVE={L}")
 
-plt.axhline(0.175, color="k", linestyle="--", label="Target porosity")
+plt.axhline(target_porosity, color="k", linestyle="--", label="Target porosity")
 
 plt.xlabel("Resolution parameter a")
 plt.ylabel("Calculated porosity")
@@ -221,7 +222,7 @@ for j, a in enumerate(a_vals):
 
     plt.plot(L_sorted, P_sorted, marker="s", label=f"a={a}")
 
-plt.axhline(0.175, color="k", linestyle="--", label="Target porosity")
+plt.axhline(target_porosity, color="k", linestyle="--", label="Target porosity")
 
 plt.xlabel("RVE size L")
 plt.ylabel("Calculated porosity")
