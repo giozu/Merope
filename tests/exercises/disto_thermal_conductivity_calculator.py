@@ -92,62 +92,14 @@ def main():
                         elapsed = time.time() - start_time
 
                         results.append((rule_name, L_RVE, a, num_voxels, L_voxel,
-                                            k_mean, error, porosity_calc, R_pore, porosity, elapsed))
-
-                        out_file = f"results_{rule_name}_a{a}_por{porosity}_Rpore{R_pore}.txt"
-
-                        with open(out_file, "w") as f:
-                            f.write(f"Homog rule: {rule_name}\n")
-                            f.write(f"L_RVE: {L_RVE}\n")
-                            f.write(f"N_voxel: {num_voxels}\n")
-                            f.write(f"L_voxel: {L_voxel:.6f}\n")
-                            f.write(f"a: {a}\n")
-                            f.write(f"Target porosity: {porosity:.3f}\n")
-                            f.write(f"Calculated porosity: {porosity_calc:.3f}\n")
-                            f.write(f"Radius of the pores: {R_pore:.3f}\n")
-                            f.write(f"K_mean: {k_mean:.6f}\n")
-                            f.write(f"Error: {error:.6e}\n")
-                            f.write(f"Elapsed time: {elapsed:.2f} s\n")
+                                            k_mean, error, porosity_calc, porosity, R_pore, elapsed))
 
     # Write a global CSV for plotting
     with open("summary.csv", "w", newline="") as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(["Rule", "L_RVE", "a", "N_voxel", "L_voxel",
-                         "K_mean", "Error", "Porosity_calc", "R_pore", "Porosity", "Elapsed_s"])
+                         "K_mean", "Error", "Porosity_calc", "Porosity", "R_pore", "Elapsed_s"])
         writer.writerows(results)
-
-    # -----------------------------------------------------------------------
-    # PLOT
-    # -----------------------------------------------------------------------
-    import pandas as pd
-    import matplotlib.pyplot as plt
-
-    data = pd.DataFrame(results, columns=["Rule", "L_RVE", "a", "N_voxel", "L_voxel",
-                                          "K_mean", "Error", "Porosity_calc", "R_pore", "Porosity", "Elapsed_s"])
-
-    plt.figure(figsize=(7,5))
-    markers = {0.1: "o", 0.2: "s", 0.3: "D"}
-    colors = {0.1: "green", 0.2: "orange", 0.3: "blue"}
-
-    for por in porosity_values:
-        subset = data[(data["Porosity"] == por) & (data["Rule"] == "Voigt")]
-        plt.plot(
-            subset["R_pore"], subset["K_mean"],
-            marker=markers.get(por, "x"),
-            linestyle="--",
-            color=colors.get(por, "black"),
-            label=f"Porosity {por}"
-        )
-
-    plt.xlim(left=0)
-    plt.xlabel("Radius")
-    plt.ylabel(r"$k_{\mathrm{eff}}$")
-    plt.title("Inclusions radius vs effective conductivity")
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig("k_eff_vs_radius.png", dpi=300)
-    plt.show()
 
     os.chdir(cwd_backup)
 
