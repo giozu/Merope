@@ -14,15 +14,13 @@ use_amitex = False  # set to True if you want to run Amitex
 
 a = 10
 ratio = 25
-R_pore = 0.1
+R_pore = 1.0
 
 L_RVE = ratio * R_pore
-L_RVE = 10
 
 domain_size = [L_RVE, L_RVE, L_RVE]     # RVE dimensions
 
 num_voxels = int(a * L_RVE / R_pore)
-num_voxels = 50
 
 num_seeds = 1                           # number of seeds for statistical variability
 
