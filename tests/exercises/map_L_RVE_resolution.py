@@ -6,14 +6,15 @@ RVE size (L_RVE) and resolution parameter (a = R_pore / L_voxel).
 """
 
 import os
-from math import sqrt
-import matplotlib.pyplot as plt
 import numpy as np
+import csv
 
-import sac_de_billes
-import merope
-import interface_amitex_fftp.amitex_wrapper as amitex
-import interface_amitex_fftp.post_processing as amitex_out
+from utils_microstructure import (
+    build_voxelized_structure,
+    run_amitex,
+    read_conductivity_matrix,
+    process_matrix
+)
 
 # ---------------------------------------------------------------------------
 # INPUT PARAMETERS
@@ -21,8 +22,6 @@ import interface_amitex_fftp.post_processing as amitex_out
 
 # Geometry
 R_pore = 1.0
-porosity = 0.10
-
 L_RVE_list = [10, 15, 20, 25, 30, 35]
 a_list     = [1, 2, 3, 4, 5, 6]
 
@@ -36,75 +35,17 @@ conductivities = [k_matrix, k_gas]
 # Seed
 seed = 0
 
-# Results folder
+porosity = 0.20
 
+# Results folder
 results_folder = "map_L_RVE_resolution_p" + str(porosity).replace(".", "_")
 os.makedirs(results_folder, exist_ok=True)
-
-
-# ---------------------------------------------------------------------------
-# FUNCTIONS
-# ---------------------------------------------------------------------------
-
-def build_voxelized_structure(domain_size, seed, radius, porosity, conductivities, voxellation):
-    """Generate a voxelized microstructure with spherical inclusions"""
-
-    # Step 1. Spherical inclusions
-    sph = merope.SphereInclusions_3D()
-    sph.setLength(domain_size)
-    sph.fromHisto(seed, sac_de_billes.TypeAlgo.RSA, 0., [[radius, porosity]], [1])
-
-    multi = merope.MultiInclusions_3D()
-    multi.setInclusions(sph)
-
-    # Step 2. Create Structure
-    structure = merope.Structure_3D(multi)
-
-    # Step 3. Create grid parameters
-    grid_params = merope.vox.create_grid_parameters_N_L_3D(voxellation, domain_size)
-
-    # Step 4. Build grid
-    grid = merope.vox.GridRepresentation_3D(structure, grid_params, merope.vox.VoxelRule.Average)
-
-    # Step 5. Analyze phase fractions (porosity is phase 1 here)
-    analyzer = merope.vox.GridAnalyzer_3D()
-    porosity_calc = analyzer.compute_percentages(grid)[1]
-
-    grid.apply_homogRule(merope.HomogenizationRule.Voigt, conductivities)
-
-    printer = merope.vox.vtk_printer_3D()
-    printer.printVTK_segmented(grid, "Zone.vtk", "Coeffs.txt", nameValue="MaterialId")
-
-    return porosity_calc
-
-
-def run_amitex():
-    num_procs = 2
-    amitex.computeThermalCoeff("Zone.vtk", num_procs)
-    return amitex_out.printThermalCoeff(".")
-
-
-def read_conductivity_matrix(file_path="thermalCoeff_amitex.txt"):
-    with open(file_path, "r") as f:
-        return [list(map(float, line.split())) for line in f]
-
-
-def process_matrix(matrix):
-    diag = [matrix[i][i] for i in range(3)]
-    offdiag = [matrix[i][j] for i in range(3) for j in range(3) if j != i]
-    k_mean = sum(diag) / 3
-    abs_error = sqrt(sum(v * v for v in offdiag))
-    return k_mean, abs_error, diag
-
-
-import csv
 
 # ---------------------------------------------------------------------------
 # MAIN
 # ---------------------------------------------------------------------------
 
 def main():
-    # make sure convergence_map/ exists
     os.makedirs(results_folder, exist_ok=True)
 
     results = []
@@ -138,7 +79,9 @@ def main():
                 matrix = None
 
             if matrix:
+                # conductivity
                 k_mean, error, diag = process_matrix(matrix)
+                
                 results.append((L, a, num_voxels, L_voxel, k_mean, error, porosity_calc))
 
                 with open("results.txt", "w") as f:
@@ -158,7 +101,10 @@ def main():
     csv_path = os.path.join(results_folder, "summary_results.csv")
     with open(csv_path, "w", newline="") as f:
         writer = csv.writer(f)
+
+        # results.append((L, a, num_voxels, L_voxel, k_mean, error, porosity_calc))
         writer.writerow(["L_RVE", "a", "N_voxel", "L_voxel", "K_mean", "Error", "Porosity_calc"])
+        
         writer.writerows(results)
     print(f"Saved CSV results to {csv_path}")
 

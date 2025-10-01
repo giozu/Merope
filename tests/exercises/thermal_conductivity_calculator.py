@@ -5,166 +5,80 @@ homogenized conductivity, and results are stored in structured output files.
 """
 
 import os
-import sac_de_billes
-import merope
 
-import archi_merope as arch
-import interface_amitex_fftp.amitex_wrapper as amitex
-import interface_amitex_fftp.post_processing as amitex_out
+from utils_microstructure import (
+    build_voxelized_structure,
+    run_amitex,
+    read_conductivity_matrix,
+    process_matrix
+)
 
+# ---------------------------------------------------------------------------
+# INPUT PARAMETERS
+# ---------------------------------------------------------------------------
 
-# ----------------------------------------------------------------------
-# Main input parameters
-# ----------------------------------------------------------------------
+# Geometry
+R_pore = 1.0               # pore radius
+L_RVE = 25                 # cubic RVE dimensions (ratio L_RVE / R_pore = 25 is recommended)
+a = 4                      # resolution parameter (4 is recommended)
 
-PorosityMin = 0.01         # minimum porosity
-PorosityMax = 99.00        # maximum porosity
-NbPorosity = 10            # number of porosity values to investigate
-R = 0.8                    # pore radius (normalized by cell size)
-Kmatrix = 1                # thermal conductivity of the solid matrix
-Kgases = 1e-3              # thermal conductivity of the pores
-NbSeed = 1                 # number of seeds (random structures) for each porosity
-NbVoxellation = 40         # voxel grid resolution
-DeltaP = (PorosityMax - PorosityMin) / (NbPorosity - 1)
+num_voxels = int(a * L_RVE / R_pore)
+L_voxel = L_RVE / num_voxels
 
-C = 20                     # size of RVE (arbitrary units)
-SizeRVE = [C, C, C]        # cubic RVE dimensions
-Voxellation = [NbVoxellation, NbVoxellation, NbVoxellation]
-K = [Kmatrix, Kgases]
+seed = 0
+porosity = 0.20
 
-Cmm = 3                    # physical size of RVE in mm
-Rmicron = R / C * Cmm * 1000  # pore radius in microns
+# Materials
+k_matrix = 1.0
+k_gas = 1e-3
+conductivities = [k_matrix, k_gas]
 
+voxellation = [num_voxels]*3
 
-# ----------------------------------------------------------------------
-# Output root directory
-# ----------------------------------------------------------------------
-root_dir = os.path.join(os.getcwd(), "thermal_conductivity_calculator")
-os.makedirs(root_dir, exist_ok=True)
+# Results folder
+results_folder = "thermal_conductivity_calculator" + str(porosity).replace(".", "_")
+os.makedirs(results_folder, exist_ok=True)
 
-results_dir = os.path.join(root_dir, "results")
-os.makedirs(results_dir, exist_ok=True)
-
-file_output_path = os.path.join(results_dir, "conductivity_results_single.txt")
-file_aggregated_path = os.path.join(results_dir, "conductivity_results_all.txt")
-
-
-# ----------------------------------------------------------------------
-# Functions
-# ----------------------------------------------------------------------
-
-def VoxellationInclusion(SizeRVE, Seed, R, Porosity, K, Voxellation):
-    """Generate voxelized structure with spherical pores."""
-    sphIncl = merope.SphereInclusions_3D()
-    sphIncl.setLength(SizeRVE)
-    sphIncl.fromHisto(Seed, sac_de_billes.TypeAlgo.RSA, 0., [[R, Porosity]], [1])
-
-    multiInclusions = merope.MultiInclusions_3D()
-    multiInclusions.setInclusions(sphIncl)
-
-    grid = merope.Voxellation_3D(multiInclusions)
-    grid.setPureCoeffs(K)
-    grid.setHomogRule(merope.HomogenizationRule.Voigt)
-    grid.setVoxelRule(merope.vox.VoxelRule.Average)
-    grid.proceed(Voxellation)
-
-    grid.printFile("Zone.vtk", "Coeffs.txt")
-
-
-def ThermalAmitex():
-    """Run AMITEX to compute homogenized thermal conductivity."""
-    number_of_processors = 2
-    amitex.computeThermalCoeff("Zone.vtk", number_of_processors)
-    amitex_out.printThermalCoeff(".")
-
-
-def write_results_single(file_output, values, porosity, seed_index):
-    """Write single porosity/seed conductivity results to file."""
-    mean_val = sum(values) / len(values)
-    num_decimals = len(str(values[0]).split('.')[1]) if '.' in str(values[0]) else 0
-    mean_fmt = f"{mean_val:.{num_decimals}f}"
-
-    with open(file_output, 'a') as f:
-        line = (
-            f"porosity_{porosity:.2f}\tseed_{seed_index}\t"
-            f"{values[0]}\t{values[1]}\t{values[2]}\t{mean_fmt}\n"
-        )
-        f.write(line)
-
-
-def read_matrix(file_path):
-    """Read conductivity matrix from AMITEX output file."""
-    with open(file_path, 'r') as f:
-        matrix = [list(map(float, line.split())) for line in f.readlines()]
-    return matrix
-
-
-def extract_diagonal(matrix):
-    """Extract main diagonal values (Kxx, Kyy, Kzz) from conductivity matrix."""
-    return [matrix[i][i] for i in range(3)]
-
-
-def update_aggregated_file(file_aggregated_path, porosity, seed_index, values,
-                           C, Cmm, Rmicron, NbVoxellation, Kmatrix, Kgases):
-    """Append conductivity results to aggregated file, with input parameters."""
-    mean_val = sum(values) / len(values)
-    num_decimals = len(str(values[0]).split('.')[1]) if '.' in str(values[0]) else 0
-    mean_fmt = float(f"{mean_val:.{num_decimals}f}")
-
-    if not os.path.exists(file_aggregated_path):
-        with open(file_aggregated_path, 'w') as f:
-            f.write("Input Parameters:\n")
-            f.write(f"C: {C}\n")
-            f.write(f"Cmm: {Cmm}\n")
-            f.write(f"Rmicron: {Rmicron:.2f} microns\n")
-            f.write(f"NbVoxellation: {NbVoxellation}\n")
-            f.write(f"Kmatrix: {Kmatrix}\n")
-            f.write(f"Kgases: {Kgases}\n")
-            f.write("Porosity\tSeed_Index\tK_xx\tK_yy\tK_zz\tK_mean\n")
-
-    with open(file_aggregated_path, 'a') as f:
-        line = (
-            f"{porosity:.4f}\t{seed_index}\t"
-            f"{values[0]:.4f}\t{values[1]:.4f}\t{values[2]:.4f}\t{mean_fmt:.4f}\n"
-        )
-        f.write(line)
-
-
-# ----------------------------------------------------------------------
-# Main routine
-# ----------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# MAIN
+# ---------------------------------------------------------------------------
 
 def main():
-    if os.path.exists(file_output_path):
-        open(file_output_path, 'w').close()
+    os.makedirs(results_folder, exist_ok=True)
+    results = []
 
-    porosity = PorosityMin
-    for i in range(NbPorosity):
-        porosity_dir = os.path.join(root_dir, f'porosity_{porosity:.4f}')
-        os.makedirs(porosity_dir, exist_ok=True)
-        os.chdir(porosity_dir)
+    cwd_backup = os.getcwd()
+    os.chdir(results_folder)
 
-        for seed in range(NbSeed):
-            seed_dir = os.path.join(porosity_dir, f'seed_{seed}')
-            os.makedirs(seed_dir, exist_ok=True)
-            os.chdir(seed_dir)
+    print(f"\n=== Running L={L_RVE}, a={a} ===")
 
-            VoxellationInclusion(SizeRVE, seed, R, porosity, K, Voxellation)
-            ThermalAmitex()
+    porosity_calc = build_voxelized_structure(
+        [L_RVE, L_RVE, L_RVE], seed, R_pore, porosity, conductivities, voxellation
+    )
 
-            matrix = read_matrix("thermalCoeff_amitex.txt")
-            values = extract_diagonal(matrix)
+    try:
+        matrix = read_conductivity_matrix() if run_amitex() else None
+    except FileNotFoundError:
+        print(f"!!! Amitex output missing for L={L_RVE}, a={a}")
+        matrix = None
 
-            write_results_single(file_output_path, values, porosity, seed)
-            update_aggregated_file(
-                file_aggregated_path, porosity, seed, values,
-                C, Cmm, Rmicron, NbVoxellation, Kmatrix, Kgases
-            )
+    if matrix:
+        # conductivity
+        k_mean, error, diag = process_matrix(matrix)
+        
+        results.append((L_RVE, a, num_voxels, L_voxel, k_mean, error, porosity_calc))
 
-            os.chdir(porosity_dir)
-        os.chdir(root_dir)
-        porosity += DeltaP
+        with open("results.txt", "w") as f:
+            f.write(f"L_RVE: {L_RVE}\n")
+            f.write(f"N_voxel: {num_voxels}\n")
+            f.write(f"L_voxel: {L_voxel:.6f}\n")
+            f.write(f"a: {a}\n")
+            f.write(f"Target porosity: {porosity:.3f}\n")
+            f.write(f"Calculated porosity: {porosity_calc:.3f}\n")
+            f.write(f"K_mean: {k_mean:.6f}\n")
+            f.write(f"Error: {error:.6e}\n")
 
+    os.chdir(cwd_backup)
 
 if __name__ == "__main__":
     main()

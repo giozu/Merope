@@ -15,8 +15,8 @@ from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 # LOAD RESULTS
 # ---------------------------------------------------------------------------
 
-target_porosity = 0.1
-results_folder = "map_L_RVE_resolution_p0_1"
+target_porosity = 0.2
+results_folder = "map_L_RVE_resolution_p0_2"
 npz_path = os.path.join(results_folder, "summary_results.npz")
 
 data = np.load(npz_path, allow_pickle=True)

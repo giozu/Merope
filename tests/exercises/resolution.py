@@ -21,6 +21,7 @@ import time
 import numpy as np
 from math import sqrt
 import matplotlib.pyplot as plt
+import csv
 
 import sac_de_billes
 import merope
@@ -76,10 +77,10 @@ def build_voxelized_structure(domain_size, seed, radius, porosity, conductivitie
     # Step 4. Build grid
     grid = merope.vox.GridRepresentation_3D(structure, grid_params, merope.vox.VoxelRule.Average)
 
-    # Step 5. Analyze phase fractions (porosity is phase 1 here)
+    # Step 5. Analyze phase fractions
     analyzer = merope.vox.GridAnalyzer_3D()
     phase_fractions = analyzer.compute_percentages(grid)
-    porosity_calc = phase_fractions[1]
+    porosity_calc = phase_fractions[1] # (porosity is phase 1 here)
 
     # Step 6. Apply homogenization
     grid.apply_homogRule(merope.HomogenizationRule.Voigt, conductivities)
@@ -91,10 +92,10 @@ def build_voxelized_structure(domain_size, seed, radius, porosity, conductivitie
     return porosity_calc
 
     
-def run_amitex():
+def run_amitex(filename = "Zone.vtk"):
     """Run Amitex on Zone.vtk"""
     num_procs = 2
-    amitex.computeThermalCoeff("Zone.vtk", num_procs)
+    amitex.computeThermalCoeff(filename, num_procs)
     return amitex_out.printThermalCoeff(".")
 
 
@@ -109,8 +110,8 @@ def process_matrix(matrix):
     diag = [matrix[i][i] for i in range(3)]
     offdiag = [matrix[i][j] for i in range(3) for j in range(3) if j != i]
     k_mean = sum(diag) / 3
-    error = sqrt(sum(v * v for v in offdiag))
-    return k_mean, error, diag
+    abs_error = sqrt(sum(v * v for v in offdiag))
+    return k_mean, abs_error, diag
 
 
 # ---------------------------------------------------------------------------
@@ -141,8 +142,12 @@ def main():
             [L_RVE, L_RVE, L_RVE], seed, R_pore, porosity, conductivities, voxellation
         )
 
-        matrix = read_conductivity_matrix() if run_amitex() else None
-
+        try:
+            matrix = read_conductivity_matrix() if run_amitex() else None
+        except FileNotFoundError:
+            print(f"!!! Amitex output missing for L={L}, a={a}")
+            matrix = None
+            
         if matrix:
             # conductivity
             k_mean, error, diag = process_matrix(matrix)
