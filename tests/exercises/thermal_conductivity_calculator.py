@@ -5,6 +5,7 @@ homogenized conductivity, and results are stored in structured output files.
 """
 
 import os
+import time
 
 from utils_microstructure import (
     build_voxelized_structure,
@@ -53,38 +54,48 @@ def main():
     print(f"\n=== Running L={L_RVE}, a={a} ===")
     
     import merope
-    homog_rules = [
-        merope.HomogenizationRule.Largest,
-        merope.HomogenizationRule.Reuss,
-        merope.HomogenizationRule.Smallest,
-        merope.HomogenizationRule.Voigt,
-    ]
+    homog_rules = {
+        "Largest":   merope.HomogenizationRule.Largest,
+        "Reuss":     merope.HomogenizationRule.Reuss,
+        "Smallest":  merope.HomogenizationRule.Smallest,
+        "Voigt":     merope.HomogenizationRule.Voigt,
+    }
 
-    porosity_calc = build_voxelized_structure(
-        [L_RVE, L_RVE, L_RVE], seed, R_pore, porosity, conductivities, voxellation, homog_rule=homog_rules[0]
-    )
+    for rule_name, rule in homog_rules.items():
+        print(f"--- Homogenization rule: {rule_name} ---")
 
-    try:
-        matrix = read_conductivity_matrix() if run_amitex() else None
-    except FileNotFoundError:
-        print(f"!!! Amitex output missing for L={L_RVE}, a={a}")
-        matrix = None
+        start_time = time.time()
+        porosity_calc = build_voxelized_structure(
+            [L_RVE, L_RVE, L_RVE],
+            seed, R_pore, porosity, conductivities,
+            voxellation, homog_rule=rule
+        )
 
-    if matrix:
-        # conductivity
-        k_mean, error, diag = process_matrix(matrix)
-        
-        results.append((L_RVE, a, num_voxels, L_voxel, k_mean, error, porosity_calc))
+        try:
+            matrix = read_conductivity_matrix() if run_amitex() else None
+        except FileNotFoundError:
+            print(f"!!! Amitex output missing for {rule_name}")
+            matrix = None
 
-        with open("results.txt", "w") as f:
-            f.write(f"L_RVE: {L_RVE}\n")
-            f.write(f"N_voxel: {num_voxels}\n")
-            f.write(f"L_voxel: {L_voxel:.6f}\n")
-            f.write(f"a: {a}\n")
-            f.write(f"Target porosity: {porosity:.3f}\n")
-            f.write(f"Calculated porosity: {porosity_calc:.3f}\n")
-            f.write(f"K_mean: {k_mean:.6f}\n")
-            f.write(f"Error: {error:.6e}\n")
+        if matrix:
+            k_mean, error, diag = process_matrix(matrix)
+            elapsed = time.time() - start_time
+
+            results.append((rule_name, L_RVE, a, num_voxels, L_voxel,
+                            k_mean, error, porosity_calc, elapsed))
+
+            out_file = f"results_{rule_name}.txt"
+            with open(out_file, "w") as f:
+                f.write(f"Homog rule: {rule_name}\n")
+                f.write(f"L_RVE: {L_RVE}\n")
+                f.write(f"N_voxel: {num_voxels}\n")
+                f.write(f"L_voxel: {L_voxel:.6f}\n")
+                f.write(f"a: {a}\n")
+                f.write(f"Target porosity: {porosity:.3f}\n")
+                f.write(f"Calculated porosity: {porosity_calc:.3f}\n")
+                f.write(f"K_mean: {k_mean:.6f}\n")
+                f.write(f"Error: {error:.6e}\n")
+                f.write(f"Elapsed time: {elapsed:.2f} s\n")
 
     os.chdir(cwd_backup)
 
