@@ -15,7 +15,7 @@ import interface_amitex_fftp.post_processing as amitex_out
 # FUNCTIONS
 # ---------------------------------------------------------------------------
 
-def build_voxelized_structure(domain_size, seed, radius, porosity, conductivities, voxellation):
+def build_voxelized_structure(domain_size, seed, radius, porosity, conductivities, voxellation, homog_rule=merope.HomogenizationRule.Voigt):
     """Generate a voxelized microstructure with spherical inclusions"""
 
     # Step 1. Spherical inclusions
@@ -40,7 +40,9 @@ def build_voxelized_structure(domain_size, seed, radius, porosity, conductivitie
     phase_fractions = analyzer.compute_percentages(grid)
     porosity_calc = phase_fractions[1] # (porosity is phase 1 here)
 
-    grid.apply_homogRule(merope.HomogenizationRule.Voigt, conductivities)
+    # print(dir(merope.HomogenizationRule))
+    # ['Largest', 'Reuss', 'Smallest', 'Voigt', ...]
+    grid.apply_homogRule(homog_rule, conductivities)
 
     # Step 7. Export VTK + coeffs
     printer = merope.vox.vtk_printer_3D()

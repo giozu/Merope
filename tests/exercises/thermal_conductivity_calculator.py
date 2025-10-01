@@ -51,9 +51,17 @@ def main():
     os.chdir(results_folder)
 
     print(f"\n=== Running L={L_RVE}, a={a} ===")
+    
+    import merope
+    homog_rules = [
+        merope.HomogenizationRule.Largest,
+        merope.HomogenizationRule.Reuss,
+        merope.HomogenizationRule.Smallest,
+        merope.HomogenizationRule.Voigt,
+    ]
 
     porosity_calc = build_voxelized_structure(
-        [L_RVE, L_RVE, L_RVE], seed, R_pore, porosity, conductivities, voxellation
+        [L_RVE, L_RVE, L_RVE], seed, R_pore, porosity, conductivities, voxellation, homog_rule=homog_rules[0]
     )
 
     try:
