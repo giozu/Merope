@@ -15,8 +15,6 @@ import merope
 import interface_amitex_fftp.amitex_wrapper as amitex
 import interface_amitex_fftp.post_processing as amitex_out
 
-from mpl_toolkits.mplot3d import Axes3D  # needed for 3D plots
-
 # ---------------------------------------------------------------------------
 # INPUT PARAMETERS
 # ---------------------------------------------------------------------------
@@ -39,7 +37,8 @@ conductivities = [k_matrix, k_gas]
 seed = 0
 
 # Results folder
-results_folder = "map_L_RVE_resolution"
+
+results_folder = "map_L_RVE_resolution_p" + str(porosity).replace(".", "_")
 os.makedirs(results_folder, exist_ok=True)
 
 
@@ -85,8 +84,8 @@ def process_matrix(matrix):
     diag = [matrix[i][i] for i in range(3)]
     offdiag = [matrix[i][j] for i in range(3) for j in range(3) if j != i]
     k_mean = sum(diag) / 3
-    error = sqrt(sum(v * v for v in offdiag))
-    return k_mean, error, diag
+    abs_error = sqrt(sum(v * v for v in offdiag))
+    return k_mean, abs_error, diag
 
 
 import csv
@@ -162,54 +161,6 @@ def main():
             a_vals=np.array(sorted(set(r[1] for r in results)), dtype=float))
 
     print(f"Saved NumPy results to {npz_path}")
-
-    # -------------------------------
-    # Convert results to arrays for plotting
-    # -------------------------------
-    L_vals   = sorted(set(r[0] for r in results))
-    a_vals   = sorted(set(r[1] for r in results))
-
-    K_map = np.full((len(L_vals), len(a_vals)), np.nan)
-    for r in results:
-        i = L_vals.index(r[0])
-        j = a_vals.index(r[1])
-        K_map[i, j] = r[4]
-
-    # Heatmap of K_mean
-    plt.figure(figsize=(8,6))
-    plt.imshow(np.ma.masked_invalid(K_map), origin="lower", aspect="auto",
-               extent=[min(a_vals), max(a_vals), min(L_vals), max(L_vals)],
-               cmap="viridis")
-    plt.colorbar(label="K_mean")
-    plt.xlabel("Resolution parameter a")
-    plt.ylabel("RVE size L")
-    plt.title("Effective conductivity map")
-    plt.tight_layout()
-    plt.savefig(os.path.join(results_folder, "K_map.png"))
-    plt.show()
-
-    # -------------------------------
-    # 3D surface plot of K_mean
-    # -------------------------------
-    A_grid, L_grid = np.meshgrid(a_vals, L_vals)
-
-    fig = plt.figure(figsize=(10,7))
-    ax = fig.add_subplot(111, projection="3d")
-
-    surf = ax.plot_surface(A_grid, L_grid, K_map, cmap="viridis", edgecolor="k", alpha=0.8)
-
-    ax.set_xlabel("Resolution parameter a")
-    ax.set_ylabel("RVE size L")
-    ax.set_zlabel("Effective conductivity K_mean")
-    ax.set_title("3D map of K_mean vs L_RVE and a")
-    ax.scatter(A_grid, L_grid, K_map, color="k", s=20)
-
-    fig.colorbar(surf, shrink=0.5, aspect=10, label="K_mean")
-
-    plt.tight_layout()
-    plt.savefig(os.path.join(results_folder, "K_map_3D.png"))
-    plt.show()
-
 
 if __name__ == "__main__":
     main()
