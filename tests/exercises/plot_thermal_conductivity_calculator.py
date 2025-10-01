@@ -27,12 +27,13 @@ plt.figure(figsize=(8,6))
 
 for rule in data["Rule"].unique():
     subset = data[data["Rule"] == rule]
-    plt.scatter(
+    plt.plot(
         subset["N_voxel"], subset["K_mean"],
         label=rule,
         marker=markers.get(rule, "o"),
         color=colors.get(rule, "black"),
-        s=60
+        markersize=7,
+        linestyle="--"
     )
 
 plt.xlabel("Number of voxels")
@@ -57,8 +58,10 @@ for rule in data["Rule"].unique():
         marker=markers.get(rule, "o"),
         color=colors.get(rule, "black"),
         markersize=7,
-        linestyle="--"   # linea tratteggiata con i marker
+        linestyle="--"
     )
+    
+plt.axvline(x=4, color="red", linestyle=":", linewidth=1.5, label="a = 4")
 
 plt.xlabel("Resolution parameter a")
 plt.ylabel(r"$k_{\mathrm{eff}}$")
