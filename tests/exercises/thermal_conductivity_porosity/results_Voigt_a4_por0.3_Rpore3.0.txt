@@ -1,0 +1,11 @@
+Homog rule: Voigt
+L_RVE: 75.0
+N_voxel: 100
+L_voxel: 0.750000
+a: 4
+Target porosity: 0.300
+Calculated porosity: 0.305
+Radius of the pores: 3.000
+K_mean: 0.599121
+Error: 1.001492e-03
+Elapsed time: 125.71 s
