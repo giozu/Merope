@@ -30,7 +30,7 @@ for por in porosity_values:
 plt.xlim(left=0)
 plt.xlabel("Radius")
 plt.ylabel(r"$k_{\mathrm{eff}}$")
-plt.title("Inclusions radius vs effective conductivity")
+# plt.title("Inclusions radius vs effective conductivity")
 plt.legend()
 plt.grid(True)
 plt.tight_layout()

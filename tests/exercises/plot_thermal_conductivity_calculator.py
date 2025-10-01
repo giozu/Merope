@@ -65,7 +65,7 @@ plt.axvline(x=4, color="red", linestyle=":", linewidth=1.5, label="a = 4")
 
 plt.xlabel("Resolution parameter a")
 plt.ylabel(r"$k_{\mathrm{eff}}$")
-plt.title("Homogenization rule")
+# plt.title("Homogenization rule")
 plt.legend()
 plt.grid(True)
 plt.tight_layout()

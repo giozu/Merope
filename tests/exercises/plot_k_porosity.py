@@ -19,7 +19,8 @@ k_maxwell = k_matrix * (
 
 # Loeb model
 alpha_loeb = 1.37
-k_loeb = k_matrix * (1 - alpha_loeb * phi)
+k_loeb_1 = k_matrix * (1 - alpha_loeb * phi)
+k_loeb_2 = k_matrix * (1 - 2.5 * phi)
 
 # --- PLOT ---
 plt.figure(figsize=(7,5))
@@ -29,12 +30,13 @@ subset = data[data["Rule"] == "Voigt"]
 plt.plot(subset["Porosity"], subset["K_mean"], "o", color="black", label="Simulation")
 
 # Plot models
-plt.plot(phi, k_maxwell, label="K_Maxwell")
-plt.plot(phi, k_loeb, label="K_Loeb")
+plt.plot(phi, k_maxwell, label="Maxwell-Eucken")
+plt.plot(phi, k_loeb_1, label="Loeb (1.37)")
+plt.plot(phi, k_loeb_2, label="Loeb (2.5)")
 
 plt.xlabel("Porosity")
 plt.ylabel(r"$k_{\mathrm{eff}}$")
-plt.title("Classical models comparison")
+# plt.title("Classical models comparison")
 plt.legend()
 plt.grid(True)
 plt.tight_layout()
