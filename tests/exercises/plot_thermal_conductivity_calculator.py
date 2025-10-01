@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 # ---------------------------------------------------------------------------
 # Read data
 # ---------------------------------------------------------------------------
-data = pd.read_csv("thermal_conductivity_calculator0_2/summary.csv")
+data = pd.read_csv("thermal_conductivity_calculator0_2/summary_0_2.csv")
 
 # Each homogenization rule has its own style
 markers = {

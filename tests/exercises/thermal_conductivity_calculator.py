@@ -16,7 +16,7 @@ from utils_microstructure import (
 # Geometry
 R_pore = 1.0
 L_RVE = 25
-a_values = [0.4, 0.6, 0.8]   # different resolutions to test
+a_values = [0.01, 0.1, 0.2, 0.3, 0.4, 0.6, 0.8, 1, 2, 3, 4, 5, 6]   # different resolutions to test
 
 seed = 0
 porosity = 0.20
@@ -50,6 +50,11 @@ def main():
 
     for a in a_values:
         num_voxels = int(a * L_RVE / R_pore)
+
+        if num_voxels <= 0:
+            print(f"!!! Skipping a={a}: resolution too low (num_voxels={num_voxels})")
+            continue
+
         L_voxel = L_RVE / num_voxels
         voxellation = [num_voxels] * 3
 
