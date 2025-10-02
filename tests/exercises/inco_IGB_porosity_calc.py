@@ -18,8 +18,6 @@ import archi_merope as arch
 import interface_amitex_fftp.amitex_wrapper as amitex
 import interface_amitex_fftp.post_processing as amitex_out
 
-
-
 # Voxel & Cell INPUTS #
 
 L = [10, 10, 10]
@@ -34,13 +32,12 @@ homogRule = merope.HomogenizationRule.Voigt  ## If i want to use homogRule, voxe
 # Names of folders that will contain results #
 
 folder_name = 'Result' #nome della cartella che conterrà i risultati
-folder_path = os.path.join("/home/giovanni/nuclear/merope/tests/mattiuz/", folder_name)
+folder_path = os.path.join("/home/giovanni/Merope/tests/exercises", folder_name)
 file_output_path = "Porosity_conduct_results.txt"
 
     
 vtkname = "Zone.vtk"
 fileCoeff = "Coeffs.txt"
-
 
 
 inclR = 0.3 # POSSIBLE INPUT to determine K
@@ -205,15 +202,15 @@ def main():
                 delta_phase, delta, voxel_rule, K, vtkname, fileCoeff
             )
 
-            ThermalAmitex()  # Calcola la conduttività termica
+            # ThermalAmitex()  # Calcola la conduttività termica
 
-            # Estrai e salva i dati di conduttività
-            matrice = leggi_matrice_da_file("thermalCoeff_amitex.txt")
-            valori_estratti = estrai_valori_principali(matrice)
-            scrivi_valori_su_file(file_output_path, valori_estratti, porosity, seed)
+            # # Estrai e salva i dati di conduttività
+            # matrice = leggi_matrice_da_file("thermalCoeff_amitex.txt")
+            # valori_estratti = estrai_valori_principali(matrice)
+            # scrivi_valori_su_file(file_output_path, valori_estratti, porosity, seed)
 
-            # Aggiungi i risultati al file aggregato
-            aggiorna_file_aggregato(file_aggregato, porosity, seed, valori_estratti, inclR, lagR, RVEsize, n3D, Kmatrix, Kgases)
+            # # Aggiungi i risultati al file aggregato
+            # aggiorna_file_aggregato(file_aggregato, porosity, seed, valori_estratti, inclR, lagR, RVEsize, n3D, Kmatrix, Kgases)
 
             os.chdir("../")  # Torna alla cartella del seed
 

@@ -39,6 +39,11 @@ porosity_values = [0.2]
 
 L_voxel = L_RVE / num_voxels
 boundary_thickness = 2 * L_voxel
+
+print(f"num_voxels = {num_voxels}")
+print(f"L_voxel = {L_voxel}")
+print(f"boundary_thickness = {boundary_thickness}")
+
 boundary_thickness = 0.001
 boundary_to_grain_ratio = boundary_thickness / grain_size
 
@@ -86,7 +91,12 @@ def build_voxelized_structure(
     # Step 1. Add spherical inclusions (pores)
     sphere_inclusions = merope.SphereInclusions_3D()
     sphere_inclusions.setLength(domain_size)
-    sphere_inclusions.fromHisto(seed, sac_de_billes.TypeAlgo.BOOL, 0., [[R_pore, inclusion_fraction]], [phase_pores])
+    sphere_inclusions.fromHisto(
+        seed, 
+        sac_de_billes.TypeAlgo.BOOL, 0., 
+        [[R_pore, inclusion_fraction]], 
+        [phase_pores]
+    )
 
     pores = merope.MultiInclusions_3D()
     pores.setInclusions(sphere_inclusions)
