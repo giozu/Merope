@@ -5,6 +5,7 @@ Helper functions for building voxelized structures, running AMITEX,
 and post-processing results.
 """
 
+import os
 from math import sqrt
 import sac_de_billes
 import merope
@@ -72,3 +73,8 @@ def process_matrix(matrix):
     abs_error = sqrt(sum(v * v for v in offdiag))
     return k_mean, abs_error, diag
 
+
+def go_to_dir(name_dir: str):
+    """Change working directory to `name_dir` and print confirmation."""
+    os.chdir(name_dir)
+    print("→ Entered directory:", name_dir)

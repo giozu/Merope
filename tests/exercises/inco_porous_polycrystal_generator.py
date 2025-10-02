@@ -3,7 +3,7 @@ import sac_de_billes
 import merope
 import csv
 import time
-from utils_microstructure import run_amitex
+from utils_microstructure import run_amitex, go_to_dir
 
 USE_AMITEX = False   # set True to run Amitex after voxelization
 
@@ -51,17 +51,6 @@ delta_phase  = 3
 Kmatrix = 1.0     # solid
 Kgases  = 1e-3    # pores
 K       = [Kmatrix, Kmatrix, Kgases]   # one entry per phase
-
-
-# ---------------------------------------------------------------------------
-# UTILS
-# ---------------------------------------------------------------------------
-
-def go_to_dir(name_dir: str):
-    """Change working directory to `name_dir` and print confirmation."""
-    os.chdir(name_dir)
-    print("→ Entered directory:", name_dir)
-
 
 # ---------------------------------------------------------------------------
 # STRUCTURE GENERATION & VOXELIZATION
