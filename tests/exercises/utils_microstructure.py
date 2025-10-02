@@ -52,7 +52,7 @@ def build_voxelized_structure(domain_size, seed, radius, porosity, conductivitie
 
 
 def run_amitex(filename = "Zone.vtk"):
-    """Run Amitex on Zone.vtk"""
+    """Run Amitex-FFTP solver to compute effective thermal conductivity."""
     num_procs = 2
     amitex.computeThermalCoeff(filename, num_procs)
     return amitex_out.printThermalCoeff(".")
