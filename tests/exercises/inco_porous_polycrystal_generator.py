@@ -37,13 +37,11 @@ R_grain = 1.0
 P_grain = 1.0
 
 # Boundary layer
-delta = 0.003     # thickness of grain-boundary delta layer
-
-# Target porosity
-porosity = 0.1    # overall target porosity (fraction)
+delta_layer = 0.003     # thickness of grain-boundary delta layer
 
 # --- Phase IDs
-grains_phase = 0
+grain_phase  = 0
+temp_phase   = 1
 incl_phase   = 2
 delta_phase  = 3
 
@@ -56,9 +54,8 @@ K       = [Kmatrix, Kmatrix, Kgases]   # one entry per phase
 # STRUCTURE GENERATION & VOXELIZATION
 # ---------------------------------------------------------------------------
 
-def Crack_structure_Voxellation(n3D, length, seed,
-                                incl_phase, grains_phase, delta_phase,
-                                delta, voxel_rule, K, vtkname, fileCoeff):
+def Crack_structure_Voxellation(n3D, length, seed, delta, voxel_rule, K, vtkname, fileCoeff):
+
     """
     Build a polycrystal with:
         - Intergranular pores
@@ -76,8 +73,10 @@ def Crack_structure_Voxellation(n3D, length, seed,
         sac_de_billes.TypeAlgo.BOOL, 
         0., 
         [[R_pores_GB, P_pores_GB]], 
-        [2]
+        [incl_phase]
     )
+
+    # pores of phase 2 (incl_phase)
     multiInclusions2 = merope.MultiInclusions_3D()
     multiInclusions2.setInclusions(intergranular)
 
@@ -90,10 +89,12 @@ def Crack_structure_Voxellation(n3D, length, seed,
         0., 
         [[R_pores_IG1, P_pores_IG1],  # R, P --> phase 1
         [R_pores_IG2, P_pores_IG2]],  # R, P --> phase 1
-        [1, 1]          # phase 1, phase 1
+        [temp_phase, temp_phase]      # phase 1, phase 1
     )
-    multiInclusions4 = merope.MultiInclusions_3D()
-    multiInclusions4.setInclusions(intragranular)
+
+    # pores of phase 1 (temp_phase)
+    multiInclusions1 = merope.MultiInclusions_3D()
+    multiInclusions1.setInclusions(intragranular)
 
     # --- Step 3: Laguerre tessellation for grains
     grain = merope.SphereInclusions_3D()
@@ -103,22 +104,30 @@ def Crack_structure_Voxellation(n3D, length, seed,
         sac_de_billes.TypeAlgo.RSA, 
         0., 
         [[R_grain, P_grain]], 
-        [1]
+        [temp_phase] # anche i grani in phase 1 (temp)
     )
     polyCrystal = merope.LaguerreTess_3D(length, grain.getSpheres())
 
     multiInclusions = merope.MultiInclusions_3D()
     multiInclusions.setInclusions(polyCrystal)
 
-    # Add boundary layer of thickness delta
-    multiInclusions.addLayer(multiInclusions.getAllIdentifiers(), delta_phase, delta)
-    # Assign all grains as solid initially
-    multiInclusions.changePhase(multiInclusions.getAllIdentifiers(),
-                                [1 for _ in multiInclusions.getAllIdentifiers()])
+    # Add boundary layer of thickness delta to the grains, and phase 1 (temp)
+    multiInclusions.addLayer(multiInclusions.getAllIdentifiers(), delta_phase, delta) # layer in delta phase
+    multiInclusions.changePhase(multiInclusions.getAllIdentifiers(), [temp_phase for _ in multiInclusions.getAllIdentifiers()])
 
     # --- Step 4: Merge structures
-    structure3 = merope.Structure_3D(multiInclusions2, multiInclusions, {2: 0, 3: 0})
-    structure  = merope.Structure_3D(structure3, multiInclusions4, {0: 2})
+    structure3 = merope.Structure_3D(
+        multiInclusions2, 
+        multiInclusions, 
+        {incl_phase: grain_phase,  # old phase --> new phase
+         delta_phase: grain_phase} # old phase --> new phase
+    )
+
+    structure  = merope.Structure_3D(
+        structure3, 
+        multiInclusions1, 
+        {grain_phase: incl_phase}
+    )
 
     # --- Step 5: Voxelization
     gridParams = merope.vox.create_grid_parameters_N_L_3D([n3D, n3D, n3D], [L_RVE, L_RVE, L_RVE])
@@ -173,8 +182,7 @@ if __name__ == "__main__":
     # --- Build & voxelize structure
     Crack_structure_Voxellation(
         n3D, [L_RVE, L_RVE, L_RVE], seed, 
-        incl_phase, grains_phase, delta_phase,
-        delta, voxel_rule, K, vtkname, fileCoeff
+        delta_layer, voxel_rule, K, vtkname, fileCoeff
     )
 
     if USE_AMITEX:
@@ -206,7 +214,6 @@ if __name__ == "__main__":
         k_eff,
         error,
         porosity_calc,
-        porosity,
         R_pore,
         elapsed
     ))
