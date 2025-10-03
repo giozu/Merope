@@ -9,7 +9,7 @@ USE_AMITEX = False   # set True to run Amitex after voxelization
 
 # --- Geometry and discretization
 L_RVE = 10
-n3D = 100                       # Number of voxels per axis
+n3D = 200                       # Number of voxels per axis
 
 seed = 0                        # RNG seed for reproducibility
 
@@ -33,7 +33,7 @@ R_pores_IG2 = 0.30
 P_pores_IG2 = 0.19
 
 # Laguerre tessellation (grains)
-R_grain = 1.0
+R_grain = 5.5
 P_grain = 1.0
 
 # Boundary layer
