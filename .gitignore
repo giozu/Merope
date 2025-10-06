@@ -5,3 +5,4 @@ BUILD-DIR
 build
 .vscode
 __pycache__
+pybind11

@@ -38,7 +38,7 @@ import interface_amitex_fftp.post_processing as amitex_out
 porosity = 0.175
 R_pore = 1.0 # so that the ratio L_RVE / R_pore is just L_RVE
 
-resolution = 2 # target_resolution --> L_1voxel = R_pore / 4
+resolution = 4 # target_resolution --> L_1voxel = R_pore / 4
 
 seed = 0
 

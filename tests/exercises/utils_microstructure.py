@@ -16,13 +16,21 @@ import interface_amitex_fftp.post_processing as amitex_out
 # FUNCTIONS
 # ---------------------------------------------------------------------------
 
-def structure_spherical_inclusions(domain_size, seed, radius, porosity, conductivities, voxellation, homog_rule=merope.HomogenizationRule.Voigt):
+def structure_spherical_inclusions(domain_size, seed, radius, porosity, conductivities, voxellation, homog_rule=merope.HomogenizationRule.Voigt, phase=1):
     """Generate a voxelized microstructure with spherical inclusions"""
 
     # Step 1. Spherical inclusions
     sph = merope.SphereInclusions_3D()
     sph.setLength(domain_size)
-    sph.fromHisto(seed, sac_de_billes.TypeAlgo.RSA, 0., [[radius, porosity]], [1])
+    sph.fromHisto(
+        seed, 
+        sac_de_billes.TypeAlgo.RSA, 
+        0., 
+        [[radius, porosity]], 
+        [phase]
+    )
+
+    print("→ Number of inclusions generated:", len(sph.getSpheres()))
 
     multi = merope.MultiInclusions_3D()
     multi.setInclusions(sph)
@@ -49,7 +57,7 @@ def structure_spherical_inclusions(domain_size, seed, radius, porosity, conducti
     printer = merope.vox.vtk_printer_3D()
     printer.printVTK_segmented(grid, "Zone.vtk", "Coeffs.txt", nameValue="MaterialId")
 
-    return porosity_calc
+    return porosity_calc, sph, structure
 
 
 def run_amitex(filename = "Zone.vtk"):

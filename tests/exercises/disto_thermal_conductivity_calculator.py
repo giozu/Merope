@@ -22,7 +22,8 @@ ratio = 25 # L_RVE / R_pore = 25
 
 seed = 0
 
-porosity_values = [0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3]  # porosity to test 
+# porosity_values = [0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3]  # porosity to test 
+porosity_values = [0.2]  # porosity to test 
 
 # Materials
 k_matrix = 1.0
@@ -81,7 +82,7 @@ def main():
                     )
 
                     try:
-                        matrix = read_conductivity_matrix() if run_amitex() else None
+                        matrix = read_conductivity_matrix() # if run_amitex() else None
                     except FileNotFoundError:
                         print(f"!!! Amitex output missing for {rule_name}")
                         matrix = None
