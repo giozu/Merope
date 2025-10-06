@@ -3,7 +3,7 @@ import time
 import csv
 
 from utils_microstructure import (
-    build_voxelized_structure,
+    structure_spherical_inclusions,
     run_amitex,
     read_conductivity_matrix,
     process_matrix
@@ -74,7 +74,7 @@ def main():
                     print(f"--- Homogenization rule: {rule_name} ---")
                     start_time = time.time()
 
-                    porosity_calc = build_voxelized_structure(
+                    porosity_calc = structure_spherical_inclusions(
                         [L_RVE, L_RVE, L_RVE],
                         seed, R_pore, porosity, conductivities,
                         voxellation, homog_rule=rule

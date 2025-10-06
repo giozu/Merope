@@ -106,7 +106,7 @@ def weighting_function(center, mean, std_dev):
     distance = sqrt(sum((coord - 0.5 * dim)**2 for coord, dim in zip(center, L)))
     return np.exp(-0.5 * (distance - mean)**2 / (std_dev**2))
 
-def Crack_structure_Voxellation(n3D, L, total_volume, seed, NbSpheres, inclRphi, nameShape, tabRadii, incl_phase, grains_phase, delta_phase, delta, voxel_rule, K, vtkname, fileCoeff):
+def cracked_structure(n3D, L, total_volume, seed, NbSpheres, inclRphi, nameShape, tabRadii, incl_phase, grains_phase, delta_phase, delta, voxel_rule, K, vtkname, fileCoeff):
     
     ### Add the spherical inclusions 
     sphIncl2 = merope.SphereInclusions_3D()
@@ -180,7 +180,7 @@ os.mkdir(folder_name)
 go_to_dir(folder_name)
 os.mkdir(str(n3D))
 go_to_dir(str(n3D))
-volume_distr = Crack_structure_Voxellation(n3D, L, total_volume, seed, NbSpheres, inclRphi, nameShape, tabRadii, incl_phase, grains_phase, delta_phase, delta, voxel_rule, K, vtkname, fileCoeff)
+volume_distr = cracked_structure(n3D, L, total_volume, seed, NbSpheres, inclRphi, nameShape, tabRadii, incl_phase, grains_phase, delta_phase, delta, voxel_rule, K, vtkname, fileCoeff)
 
 numeri = volume_distr
 plt.hist(numeri, bins= 20, edgecolor='black', alpha=0.7)

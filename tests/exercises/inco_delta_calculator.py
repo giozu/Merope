@@ -77,7 +77,7 @@ coeff_filename = "Coeffs.txt"
 # FUNCTION: Build and voxelize structure
 # ---------------------------------------------------------------------------
 
-def build_voxelized_structure(
+def structure_spherical_inclusions(
     num_voxels, domain_size, seed, R_pore, inclusion_fraction,
     grain_params, aspect_ratio_y, phase_pores, phase_grains,
     phase_boundary, boundary_thickness, voxel_rule, conductivities,
@@ -241,7 +241,7 @@ def main():
                 os.chdir(seed_folder)
 
                 # build structure and compute porosity
-                porosity_calc = build_voxelized_structure(
+                porosity_calc = structure_spherical_inclusions(
                     num_voxels, domain_size, seed, R_pore, porosity,
                     grain_params, aspect_ratio_y, phase_pores, phase_grains,
                     phase_boundary, boundary_thickness, voxel_rule,

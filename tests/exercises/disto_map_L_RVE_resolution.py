@@ -10,7 +10,7 @@ import numpy as np
 import csv
 
 from utils_microstructure import (
-    build_voxelized_structure,
+    structure_spherical_inclusions,
     run_amitex,
     read_conductivity_matrix,
     process_matrix
@@ -68,7 +68,7 @@ def main():
             cwd_backup = os.getcwd()
             os.chdir(case_folder)
 
-            porosity_calc = build_voxelized_structure(
+            porosity_calc = structure_spherical_inclusions(
                 [L, L, L], seed, R_pore, porosity, conductivities, voxellation
             )
 

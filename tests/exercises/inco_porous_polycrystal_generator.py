@@ -9,7 +9,7 @@ USE_AMITEX = False   # set True to run Amitex after voxelization
 
 # --- Geometry and discretization
 L_RVE = 10
-n3D = 200                       # Number of voxels per axis
+n3D = 100                       # Number of voxels per axis
 
 seed = 0                        # RNG seed for reproducibility
 
@@ -33,11 +33,11 @@ R_pores_IG2 = 0.30
 P_pores_IG2 = 0.19
 
 # Laguerre tessellation (grains)
-R_grain = 5.5
+R_grain = 1.0
 P_grain = 1.0
 
 # Boundary layer
-delta_layer = 0.003     # thickness of grain-boundary delta layer
+grain_boundary_layer = 0.003     # thickness of grain-boundary delta layer
 
 # --- Phase IDs
 grain_phase  = 0
@@ -54,7 +54,7 @@ K       = [Kmatrix, Kmatrix, Kgases]   # one entry per phase
 # STRUCTURE GENERATION & VOXELIZATION
 # ---------------------------------------------------------------------------
 
-def Crack_structure_Voxellation(n3D, length, seed, delta, voxel_rule, K, vtkname, fileCoeff):
+def cracked_structure(n3D, length, seed, delta, voxel_rule, K, vtkname, fileCoeff, INTRA=False, INTER=False):
 
     """
     Build a polycrystal with:
@@ -66,37 +66,39 @@ def Crack_structure_Voxellation(n3D, length, seed, delta, voxel_rule, K, vtkname
     """
 
     # --- Step 1: Intergranular spherical multiInc_intergranular (large pores)
-    intergranular = merope.SphereInclusions_3D()
-    intergranular.setLength(length)
-    intergranular.fromHisto(
-        seed, 
-        sac_de_billes.TypeAlgo.BOOL, 
-        0., 
-        [[R_pores_GB, P_pores_GB]], 
-        [incl_phase]
-    )
+    if INTER:
+        intergranular = merope.SphereInclusions_3D()
+        intergranular.setLength(length)
+        intergranular.fromHisto(
+            seed, 
+            sac_de_billes.TypeAlgo.BOOL, 
+            0., 
+            [[R_pores_GB, P_pores_GB]], 
+            [incl_phase]
+        )
 
-    # pores of incl_phase)
-    multiInc_intergranular = merope.MultiInclusions_3D()
-    multiInc_intergranular.setInclusions(intergranular)
+        # pores of incl_phase)
+        multiInc_intergranular = merope.MultiInclusions_3D()
+        multiInc_intergranular.setInclusions(intergranular)
 
     # --- Step 2: Intragranular spherical multiInc_intergranular (small pores)
-    intragranular = merope.SphereInclusions_3D()
-    intragranular.setLength(length)
-    intragranular.fromHisto(
-        seed, 
-        sac_de_billes.TypeAlgo.BOOL, 
-        0., 
-        [[R_pores_IG1, P_pores_IG1],  # R, P --> phase 1
-        [R_pores_IG2, P_pores_IG2]],  # R, P --> phase 1
-        [temp_phase, temp_phase]      # phase 1, phase 1
-    )
+    if INTRA:
+        intragranular = merope.SphereInclusions_3D()
+        intragranular.setLength(length)
+        intragranular.fromHisto(
+            seed, 
+            sac_de_billes.TypeAlgo.BOOL, 
+            0., 
+            [[R_pores_IG1, P_pores_IG1],  # R, P --> phase 1
+            [R_pores_IG2, P_pores_IG2]],  # R, P --> phase 1
+            [temp_phase, temp_phase]      # phase 1, phase 1
+        )
 
-    # pores of phase 1 (temp_phase)
-    multiInc_intragranular = merope.MultiInclusions_3D()
-    multiInc_intragranular.setInclusions(intragranular)
+        # pores of phase 1 (temp_phase)
+        multiInc_intragranular = merope.MultiInclusions_3D()
+        multiInc_intragranular.setInclusions(intragranular)
 
-    # # --- Step 3: Laguerre tessellation for grains
+    # --- Step 3: Laguerre tessellation for grains
     grain = merope.SphereInclusions_3D()
     grain.setLength(length)
     grain.fromHisto(
@@ -118,12 +120,13 @@ def Crack_structure_Voxellation(n3D, length, seed, delta, voxel_rule, K, vtkname
     # multiInc_grain.changePhase(multiInc_grain.getAllIdentifiers(),multiInc_grain.getAllIdentifiers()) # grain in fasi diverse (per vederli su paraview)
 
     # --- Step 4: Merge structures
-    structure3 = merope.Structure_3D(
-        multiInc_intergranular, # inter-granulari, phase 2 (incl)
-        multiInc_grain,  # grain (phase 1) + delta (phase 3)
-        {incl_phase: grain_phase,  # old phase --> new phase
-         delta_phase: grain_phase} # old phase --> new phase
-    )
+    if INTER:
+        structure3 = merope.Structure_3D(
+            multiInc_intergranular, # inter-granulari, phase 2 (incl)
+            multiInc_grain,  # grain (phase 1) + delta (phase 3)
+            {incl_phase: grain_phase,  # old phase --> new phase
+            delta_phase: grain_phase} # old phase --> new phase
+        )
 
     structure  = merope.Structure_3D(
         structure3, 
@@ -183,9 +186,9 @@ if __name__ == "__main__":
     go_to_dir(str(n3D))
 
     # --- Build & voxelize structure
-    Crack_structure_Voxellation(
+    cracked_structure(
         n3D, [L_RVE, L_RVE, L_RVE], seed, 
-        delta_layer, voxel_rule, K, vtkname, fileCoeff
+        grain_boundary_layer, voxel_rule, K, vtkname, fileCoeff
     )
 
     if USE_AMITEX:

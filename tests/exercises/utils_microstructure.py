@@ -16,7 +16,7 @@ import interface_amitex_fftp.post_processing as amitex_out
 # FUNCTIONS
 # ---------------------------------------------------------------------------
 
-def build_voxelized_structure(domain_size, seed, radius, porosity, conductivities, voxellation, homog_rule=merope.HomogenizationRule.Voigt):
+def structure_spherical_inclusions(domain_size, seed, radius, porosity, conductivities, voxellation, homog_rule=merope.HomogenizationRule.Voigt):
     """Generate a voxelized microstructure with spherical inclusions"""
 
     # Step 1. Spherical inclusions

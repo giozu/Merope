@@ -95,7 +95,7 @@ def generate_spheres(target_porosity, mean_radius, std_radius, num_radius):
     return [[r, f] for r, f in zip(radii, fractions)]
 
 
-def Crack_structure_Voxellation(n3D, L, seed, inclRphi, lagRphi, incl_phase, target_porosity, mean_radius, std_radius, num_radius, grains_phase, delta_phase, delta, voxel_rule, K, vtkname, fileCoeff):
+def cracked_structure(n3D, L, seed, inclRphi, lagRphi, incl_phase, target_porosity, mean_radius, std_radius, num_radius, grains_phase, delta_phase, delta, voxel_rule, K, vtkname, fileCoeff):
     
     ### Add the spherical inclusions INTER-POROSITY
     sphIncl2 = merope.SphereInclusions_3D()
@@ -164,7 +164,7 @@ os.mkdir(folder_name)
 go_to_dir(folder_name)
 os.mkdir(str(n3D))
 go_to_dir(str(n3D))
-Crack_structure_Voxellation(n3D, L, seed, inclRphi, lagRphi, incl_phase, target_porosity, mean_radius, std_radius, num_radius, grains_phase, delta_phase, delta, voxel_rule, K, vtkname, fileCoeff)
+cracked_structure(n3D, L, seed, inclRphi, lagRphi, incl_phase, target_porosity, mean_radius, std_radius, num_radius, grains_phase, delta_phase, delta, voxel_rule, K, vtkname, fileCoeff)
 #ThermalAmitex()
 go_to_dir("../")
 

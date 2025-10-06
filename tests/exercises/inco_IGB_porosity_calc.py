@@ -72,7 +72,7 @@ Kgases = 1e-03  #thermal conductivity of gases in pore
 
 K = [Kmatrix, Kmatrix, Kgases]
 
-def Crack_structure_Voxellation(n3D, L, seed, inclR, inclPhi, lagRphi, incl_phase, grains_phase, delta_phase, delta, voxel_rule, K, vtkname, fileCoeff):
+def cracked_structure(n3D, L, seed, inclR, inclPhi, lagRphi, incl_phase, grains_phase, delta_phase, delta, voxel_rule, K, vtkname, fileCoeff):
     
     ### Add the spherical inclusions 
     sphIncl2 = merope.SphereInclusions_3D()
@@ -197,7 +197,7 @@ def main():
             os.chdir(seed_folder)  # Entra nella cartella per il seed
 
             # Calcola la porosità
-            porosity = Crack_structure_Voxellation(
+            porosity = cracked_structure(
                 n3D, L, seed, inclR, inclPhi[i], lagRphi, incl_phase, grains_phase,
                 delta_phase, delta, voxel_rule, K, vtkname, fileCoeff
             )

@@ -58,7 +58,7 @@ if not os.path.exists(results_folder):
 # ---------------------------------------------------------------------------
 # FUNCTIONS
 # ---------------------------------------------------------------------------
-def build_voxelized_structure(domain_size, seed, radius, porosity, conductivities, voxellation):
+def structure_spherical_inclusions(domain_size, seed, radius, porosity, conductivities, voxellation):
     """Generate a voxelized microstructure with spherical inclusions"""
 
     # Step 1. Spherical inclusions
@@ -141,7 +141,7 @@ def main():
         cwd_backup = os.getcwd()
         os.chdir(case_folder)
 
-        porosity_calc = build_voxelized_structure(
+        porosity_calc = structure_spherical_inclusions(
             [L, L, L], seed, R_pore, porosity, conductivities, voxellation
         )
 
