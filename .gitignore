@@ -6,3 +6,7 @@ build
 .vscode
 __pycache__
 pybind11
+k_eff_porosity
+map_L_RVE_resolution_*
+spherical_inclusions
+Result

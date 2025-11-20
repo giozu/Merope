@@ -32,7 +32,7 @@ plt.plot(subset["Porosity"], subset["K_mean"], "o", color="black", label="Simula
 # Plot models
 plt.plot(phi, k_maxwell, label="Maxwell-Eucken")
 plt.plot(phi, k_loeb_1, label="Loeb (1.37)")
-plt.plot(phi, k_loeb_2, label="Loeb (2.5)")
+# plt.plot(phi, k_loeb_2, label="Loeb (2.5)")
 
 plt.xlabel("Porosity")
 plt.ylabel(r"$k_{\mathrm{eff}}$")

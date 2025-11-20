@@ -34,7 +34,7 @@ homogRule = merope.HomogenizationRule.Voigt  ## If i want to use homogRule, voxe
 # Names of folders that will contain results #
 
 folder_name = 'Result' #nome della cartella che conterrà i risultati
-folder_path = os.path.join("/home/giovanni/nuclear/merope/tests/mattiuz", folder_name)
+folder_path = os.path.join("/home/giovanni/Merope/tests/exercises", folder_name)
 file_output_path = "porDelta_conduct_results.txt"
 
     
