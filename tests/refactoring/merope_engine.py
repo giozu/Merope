@@ -154,6 +154,19 @@ class MeropeEngine:
         print(f"[CHECK] L_RVE/R_pore = {crit1:.2f}  (OK)")
         print(f"[CHECK] R_pore/L_voxel = {crit2:.2f}  (OK)")
 
+    def _phase_fractions(self, structure, label):
+        """
+        Voxelizza 'structure' e stampa/ritorna le frazioni di fase.
+        Utile per debug delle porosità intermedie.
+        """
+        grid, phase_fracs = self._voxelize_and_assign(structure)
+        print(f"\n[DEBUG FRACTIONS] {label}")
+        for pid, frac in phase_fracs.items():
+            print(f"  phase {pid}: {frac:.6f}")
+        print("--------------")
+        return phase_fracs
+
+
     def suggest_n3D(self, R_pore):
         """
         Suggerisce il n3D minimo per soddisfare:
@@ -211,14 +224,14 @@ class MeropeEngine:
     # 2) Interconnected porosity (Laguerre + film δ + merge)
     # ------------------------------------------------------------------
     def build_interconnected_structure(self,
-                                    seed,
-                                    p_delta,
-                                    p_intra,
-                                    delta_phys):
+                                      seed,
+                                      p_delta,
+                                      p_intra,
+                                      delta_phys):
 
         L = self.L
 
-        phase_grains   = self.phase_matrix    # 0
+        phase_grains   = 0
         phase_intra    = 1
         phase_inter    = 2
         phase_boundary = 3
@@ -276,6 +289,12 @@ class MeropeEngine:
         grains.addLayer(ids, phase_boundary, delta_phys)
         grains.changePhase(ids, [1 for _ in ids])  # temp
 
+        # ---- DEBUG porosità a questo stadio (solo grains+layer)
+        frac_grains_layer = self._phase_fractions(
+            merope.Structure_3D(grains),
+            label="grains + boundary layer"
+        )
+
         # -------------------------
         # 4) merge inter-pores + grains
         # -------------------------
@@ -308,7 +327,7 @@ class MeropeEngine:
     # 3) Public API: run distributed / interconnected cases
     # ------------------------------------------------------------------
 
-    def run_distributed_case(self, seed, p_target,safe_geometry=True):
+    def run_distributed_case(self, seed, p_target, safe_geometry=True):
         """
         Costruisce, voxelizza, lancia AMITEX e ritorna dizionario risultati
         per il caso 'distributed porosity'.
@@ -404,9 +423,9 @@ class MeropeEngine:
                                 seed,
                                 p_delta,
                                 p_intra,
-                                delta_phys):
-
-        p_target = p_delta + p_intra
+                                delta_phys,
+                                p_target=None,
+                                amitex=True):
 
         case_dir = self._case_dir(
             f"p{p_target:.3f}".replace(".", "_"),
@@ -429,8 +448,13 @@ class MeropeEngine:
             nameValue="MaterialId"
         )
 
-        kvals = self._run_amitex_in_dir(case_dir)
-        kmean = float(np.mean(kvals))
+        if amitex:
+            kvals = self._run_amitex_in_dir(case_dir)
+            kmean = float(np.mean(kvals))
+        else:
+            k_an = self.Kmatrix * (1 - 1.37*p_meas)
+            kvals = [k_an, k_an, k_an]
+            kmean = k_an
 
         return dict(
             case_type="interconnected",
