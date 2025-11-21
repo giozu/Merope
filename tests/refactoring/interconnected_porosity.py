@@ -125,7 +125,8 @@ for p_delta in p_delta_values:
                 p_delta=p_delta,
                 p_intra=p_intra,
                 delta_phys=delta_phys,
-                amitex=True
+                amitex=True, 
+                p_target=p_est
             )
 
             p_meas = res["p_meas"]
