@@ -22,12 +22,12 @@ os.makedirs(WORK_DIR, exist_ok=True)
 # Sampling ranges
 # -----------------------------------------------------------
 
-R_PORE = 0.25
+L_RVE = 10
 
-L_values = np.linspace(3.0, 9.0, 8)     # controls crit1
-n3D_values = np.arange(20, 130, 20)     # controls crit2
+crit1_values = np.linspace(5, 25, 5)
+crit2_values = np.linspace(1, 5, 5)
 
-outfile = os.path.join(WORK_DIR, "geometry_scan_full.txt")
+outfile = os.path.join(WORK_DIR, "geometry_scan.txt")
 
 with open(outfile, "w") as f:
     f.write("L_RVE\tR_pore\tn3D\tcrit1\tcrit2\tKmean\tp_por_meas\n")
@@ -36,30 +36,36 @@ with open(outfile, "w") as f:
 # Full 2D scan
 # -----------------------------------------------------------
 
-for L_RVE in L_values:
-    for n3D in n3D_values:
+for crit_1 in crit1_values:
+    for crit_2 in crit2_values:
+
+        R_PORE = L_RVE / crit_1
+        n3D = int(crit_2 * (L_RVE / R_PORE))
+
+        if n3D < 16:
+            print(f"Skipping n3D={n3D} (too coarse)")
+            continue
 
         print(f"[SCAN] L={L_RVE:.2f}, n3D={n3D}")
 
         engine = MeropeEngine(
             L=[L_RVE, L_RVE, L_RVE],
-            n3D=int(n3D),
+            n3D=n3D,
             lagR=lagR,
             lagPhi=lagPhi,
             inclR_inter=0.0,
             inclR_intra=R_PORE,
             k_matrix=K_MATRIX,
             k_gas=K_GAS,
-            work_dir=os.path.join(WORK_DIR,f"L{L_RVE:.2f}_n{n3D}"),
+            work_dir=os.path.join(WORK_DIR,f"L{int(L_RVE)}_n{n3D}"),
             nproc=1
         )
 
-        # geometry not safe -> we want ALL combinations
         res = engine.run_distributed_case(seed=SEED, p_target=P_FIXED, safe_geometry=False)
 
         L = float(L_RVE)
         R = float(R_PORE)
-        n = int(n3D)
+        n = n3D
         L_voxel = L / n
 
         crit1 = L / R

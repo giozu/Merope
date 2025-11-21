@@ -68,7 +68,7 @@ grain_phi = 1.0      # must be 1.0 to fill the RVE with grains before porosity
 delta = 0.003        # physical thickness of boundary layer
 
 # toggle Amitex run
-USE_AMITEX = True   # set True to run Amitex after voxelization
+USE_AMITEX = False   # set True to run Amitex after voxelization
 
 
 # phase indices (keep consistent!)

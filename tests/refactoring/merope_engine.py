@@ -208,103 +208,101 @@ class MeropeEngine:
         return struct
 
     # ------------------------------------------------------------------
-    # 2) Interconnected porosity (Laguerre + film δ + merge alla tesista)
+    # 2) Interconnected porosity (Laguerre + film δ + merge)
     # ------------------------------------------------------------------
-
     def build_interconnected_structure(self,
-                                       seed,
-                                       p_delta,
-                                       p_intra,
-                                       delta_ratio):
-        """
-        Microstruttura con:
-          - pori intergranulari (p_delta) → spherical phase 2
-          - pori intragranulari (p_intra) → spherical phase 2 dopo merge
-          - grani Laguerre + layer δ (phase 3) sui grain boundaries
-          - merge in due step:
-              1) {2→0, 3→0}
-              2) {0→2}
-        Risultato finale: phase 0 = matrice, phase 2 = poro totale.
-        """
+                                    seed,
+                                    p_delta,
+                                    p_intra,
+                                    delta_phys):
 
-        delta_phys = float(delta_ratio) * self.lagR
+        L = self.L
 
-        # --- 1. Pori intragranulari (fase 2 temporanea) ---
+        phase_grains   = self.phase_matrix    # 0
+        phase_intra    = 1
+        phase_inter    = 2
+        phase_boundary = 3
+
+        # -------------------------
+        # 1) inter-granular pores
+        # -------------------------
+        sph_inter = merope.SphereInclusions_3D()
+        sph_inter.setLength(L)
+        if p_delta > 0:
+            sph_inter.fromHisto(
+                int(seed),
+                sac_de_billes.TypeAlgo.BOOL,
+                0.0,
+                [[self.inclR_inter, p_delta]],
+                [phase_inter],
+            )
+        inter_pores = merope.MultiInclusions_3D()
+        inter_pores.setInclusions(sph_inter)
+
+        # -------------------------
+        # 2) intra-granular pores
+        # -------------------------
         sph_intra = merope.SphereInclusions_3D()
-        sph_intra.setLength(self.L)
-        if p_intra > 0.0:
+        sph_intra.setLength(L)
+        if p_intra > 0:
             sph_intra.fromHisto(
                 int(seed),
                 sac_de_billes.TypeAlgo.BOOL,
                 0.0,
-                [[self.inclR_intra, float(p_intra)]],
-                [self.phase_pore]  # 2
+                [[self.inclR_intra, p_intra]],
+                [phase_intra],
             )
-        multi_intra = merope.MultiInclusions_3D()
-        multi_intra.setInclusions(sph_intra)
-        struct_intra = merope.Structure_3D(multi_intra)
+        intra_pores = merope.MultiInclusions_3D()
+        intra_pores.setInclusions(sph_intra)
 
-        # --- 2. Pori intergranulari (fase 2 temporanea) ---
-        sph_gb = merope.SphereInclusions_3D()
-        sph_gb.setLength(self.L)
-        if p_delta > 0.0:
-            sph_gb.fromHisto(
-                int(seed),
-                sac_de_billes.TypeAlgo.BOOL,
-                0.0,
-                [[self.inclR_inter, float(p_delta)]],
-                [self.phase_pore]  # 2
-            )
-        multi_gb = merope.MultiInclusions_3D()
-        multi_gb.setInclusions(sph_gb)
-
-        # --- 3. Laguerre grains (fase 1) + layer GB (fase 3) ---
+        # -------------------------
+        # 3) Laguerre grains + boundary layer
+        # -------------------------
         sph_lag = merope.SphereInclusions_3D()
-        sph_lag.setLength(self.L)
+        sph_lag.setLength(L)
         sph_lag.fromHisto(
             int(seed),
-            sac_de_billes.TypeAlgo.BOOL,  # BOOL per evitare problemi RSA
+            sac_de_billes.TypeAlgo.RSA,
             0.0,
             [[self.lagR, self.lagPhi]],
-            [1]  # fase 1 temporanea per i grani
+            [1],  # temporary IDs for seed
         )
 
-        poly = merope.LaguerreTess_3D(self.L, sph_lag.getSpheres())
-        multi_poly = merope.MultiInclusions_3D()
-        multi_poly.setInclusions(poly)
+        tess = merope.LaguerreTess_3D(L, sph_lag.getSpheres())
+        grains = merope.MultiInclusions_3D()
+        grains.setInclusions(tess)
 
-        # aggiunge layer ai grain boundaries in fase 3
-        multi_poly.addLayer(
-            multi_poly.getAllIdentifiers(),
-            self.phase_layer,
-            delta_phys
+        ids = grains.getAllIdentifiers()
+        grains.addLayer(ids, phase_boundary, delta_phys)
+        grains.changePhase(ids, [1 for _ in ids])  # temp
+
+        # -------------------------
+        # 4) merge inter-pores + grains
+        # -------------------------
+        map_inter_boundary_to_grains = {
+            phase_inter: phase_grains,
+            phase_boundary: phase_grains
+        }
+
+        struct_inter_on_grains = merope.Structure_3D(
+            inter_pores,
+            grains,
+            map_inter_boundary_to_grains
         )
 
-        # rimette tutti i grani in fase 1 (rimane layer in fase 3)
-        multi_poly.changePhase(
-            multi_poly.getAllIdentifiers(),
-            [1 for _ in multi_poly.getAllIdentifiers()]
-        )
+        # -------------------------
+        # 5) overlay intra-pores, force (0 → 2)
+        # -------------------------
+        final_overlay_remap = {phase_grains: 2}
 
-        # --- 4. Merge alla tesista ---
-
-        # Step A: pori inter + grani+layer, mappando
-        #   phase 2 → 0 (vuoto)
-        #   phase 3 → 0 (vuoto)
-        struct_inter_poly = merope.Structure_3D(
-            multi_gb,
-            multi_poly,
-            {self.phase_pore: 0, self.phase_layer: 0}
-        )
-
-        # Step B: aggiungi pori intra e mappa 0 → 2 (poro finale)
         final_struct = merope.Structure_3D(
-            struct_inter_poly,
-            struct_intra,
-            {0: self.phase_pore}
+            struct_inter_on_grains,
+            intra_pores,
+            final_overlay_remap
         )
 
-        return final_struct, delta_phys
+        return final_struct
+
 
     # ------------------------------------------------------------------
     # 3) Public API: run distributed / interconnected cases
@@ -402,55 +400,48 @@ class MeropeEngine:
             "crit2_Rpore_over_Lvoxel": crit2,
         }
 
-    def run_interconnected_case(self, seed, p_target, delta_ratio):
-        """
-        Costruisce, voxelizza, lancia AMITEX e ritorna risultati per
-        il caso 'interconnected porosity' a p_target fissata.
-        Il partizionamento p_delta/p_intra è scelto come:
-            p_delta = p_target * (1 - delta_ratio)
-            p_intra = p_target - p_delta
-        (puoi cambiarlo nel run script se vuoi una legge diversa).
-        """
-        p_delta = float(p_target) * (1.0 - float(delta_ratio))
-        p_intra = float(p_target) - p_delta
+    def run_interconnected_case(self,
+                                seed,
+                                p_delta,
+                                p_intra,
+                                delta_phys):
+
+        p_target = p_delta + p_intra
 
         case_dir = self._case_dir(
-            "interconnected",
             f"p{p_target:.3f}".replace(".", "_"),
-            f"delta_{delta_ratio:.3f}".replace(".", "_"),
+            f"delta_{delta_phys:.4f}".replace(".", "_"),
             f"seed_{seed}"
         )
 
-        structure, delta_phys = self.build_interconnected_structure(
-            seed, p_delta, p_intra, delta_ratio
+        structure = self.build_interconnected_structure(
+            seed, p_delta, p_intra, delta_phys
         )
-        grid, phase_fracs = self._voxelize_and_assign(structure)
+        grid, phases = self._voxelize_and_assign(structure)
 
-        p_por_meas = phase_fracs.get(self.phase_pore, 0.0)
+        p_meas = phases.get(self.phase_pore, 0.0)
 
-        # esporta VTK + Coeffs
         printer = merope.vox.vtk_printer_3D()
-        vtk_path = os.path.join(case_dir, "Zone.vtk")
-        coeff_path = os.path.join(case_dir, "Coeffs.txt")
         printer.printVTK_segmented(
-            grid, vtk_path, coeff_path, nameValue="MaterialId"
+            grid,
+            os.path.join(case_dir, "Zone.vtk"),
+            os.path.join(case_dir, "Coeffs.txt"),
+            nameValue="MaterialId"
         )
 
-        # lancia AMITEX
-        kvals = self._run_amitex_in_dir(case_dir, vtk_name="Zone.vtk")
+        kvals = self._run_amitex_in_dir(case_dir)
         kmean = float(np.mean(kvals))
 
-        return {
-            "case_type": "interconnected",
-            "seed": seed,
-            "p_target": p_target,
-            "p_por_meas": p_por_meas,
-            "p_delta": p_delta,
-            "p_intra": p_intra,
-            "delta_ratio": delta_ratio,
-            "delta_phys": delta_phys,
-            "Kxx": kvals[0],
-            "Kyy": kvals[1],
-            "Kzz": kvals[2],
-            "Kmean": kmean,
-        }
+        return dict(
+            case_type="interconnected",
+            seed=seed,
+            p_target=p_target,
+            p_meas=p_meas,
+            p_delta=p_delta,
+            p_intra=p_intra,
+            delta_phys=delta_phys,
+            Kxx=kvals[0],
+            Kyy=kvals[1],
+            Kzz=kvals[2],
+            Kmean=kmean
+        )

@@ -9,4 +9,8 @@ pybind11
 k_eff_porosity
 map_L_RVE_resolution_*
 spherical_inclusions
-Result
+Result*
+amitex_simulation
+DeltaScan_Results
+Distributed_Test
+Geometry_Scan
