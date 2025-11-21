@@ -91,7 +91,7 @@ def build_microstructure(n3D, L, seed, p_delta, p_intra,
     sph_gb = merope.SphereInclusions_3D()
     sph_gb.setLength(L)
     sph_gb.fromHisto(seed,
-                     sac_de_billes.TypeAlgo.RSA,
+                     sac_de_billes.TypeAlgo.BOOL,
                      0.,
                      [[inclR, p_delta]],
                      [2])
@@ -102,7 +102,7 @@ def build_microstructure(n3D, L, seed, p_delta, p_intra,
     sph_lag = merope.SphereInclusions_3D()
     sph_lag.setLength(L)
     sph_lag.fromHisto(seed,
-                      sac_de_billes.TypeAlgo.RSA,
+                      sac_de_billes.TypeAlgo.BOOL,
                       0.,
                       [[lagR, lagPhi]],
                       [1])
