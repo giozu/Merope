@@ -1,0 +1,343 @@
+AMITEX_PATH = /home/alessio/Thesis_Merope/Merope/amitex_fftp-v8.17.14
+VERSION 8.17.14
+Duration COPY XML files (s) :  0.18326977E-01
+ 
+STRUCTURE GRID, pinceau 0
+----dimensions nx,ny,nz   250  250  250
+----pas dx,dy,dz  0.40000000E-01 0.40000000E-01 0.40000000E-01
+----volume voxel dV  0.64000000E-04
+----taille maximale Tmax  0.10000000E+02
+Duration READ HEADINGS vtk files (s) :  0.68123600E-03
+Simulation performed on 6 process with :
+2 lines
+3 columns
+Dimensions : 250x250x250
+Duration INITIALIZE 2DECOMP&FFT (s):  0.25087986E+01
+Parametres de l'algorithme definis dans le fichier : algo_default_diffusion.xml
+Duration READING algorithm parameters (s) :  0.75752200E-02
+Simulation without composite voxels
+ 
+LECTURE DES PROPRIETES MATERIAU
+Pas de numero de materiau defini dans un fichier vtk.
+Numeros de zones definis dans le fichier : double_layer_structure.vtk
+Duration READING the geometry (s):  0.11863385E+03
+Materials defined in file : mat_lin_diffusion.xml
+Duration BUILDING 'material' derived type :  0.22121924E-01
+ 
+STRUCTURE PARAM_ALGO 
+=====================
+ 
+Commun MECANIQUE-DIFFUSION
+Algorithme : basic_scheme    
+Critere d'equilibre :  0.10000000E-03
+Critere sur la contrainte moyenne :  0.10000000E-03
+Critere en deformation :  0.10000000E-09
+Simulation with convergence acceleration.
+Acceleration every      3 iterations.
+Max number of iterations :   3000
+Min number of iterations :      1
+Min number of iterations after an acceleration (0 or 1) :      1
+Calcul effectue sans convergence forcee.
+Initilisation ('default' ou 'previous') : default         
+ 
+Specifique DIFFUSION
+Calcul stationnaire
+Filtre de l'operateur de Green : hexa             R =  0.10000000E+01
+Nombre de variables de diffusion :    1
+ 
+ 
+STRUCTURE MATERIAU, pinceau 0
+----Indice 1
+numM 1
+taille du vecteur 'position' 2593750
+taille du tableau 'zone' 15993
+libnameK /home/alessio/Thesis_Merope/Merope/amitex_fftp-v8.17.14/libAmitex/src/materiauxK/libUmatAmitexK.so
+lawnameK fourier_iso_polarization
+NCoeffK 4
+tailles du tableau 'CoeffK' :4 - 15993
+CoeffK(1,1) -0.22250700-304
+ 
+Chargement defini dans le fichier : loading.xml
+Duree de la construction de la structure chargement :  0.18518090E-02
+Nombre de pas de chargement :            1
+ 
+STRUCTURE LOADING, pinceau 0
+----Indice 1
+Nincr 1
+Temps final  0.10000000E+01
+Discretisation (0=user, 1=lin.) 0
+Pilotage (0=GradD, 1=FluxD) 0
+Evolution, Diff, (0=const., 1=lin.) 1
+Valeur imposee, Diffusion, fin de charg.  0.00000000E+00
+Pilotage (0=GradD, 1=FluxD) 0
+Evolution, Diff, (0=const., 1=lin.) 1
+Valeur imposee, Diffusion, fin de charg.  0.00000000E+00
+Pilotage (0=GradD, 1=FluxD) 0
+Evolution, Diff, (0=const., 1=lin.) 1
+Valeur imposee, Diffusion, fin de charg.  0.00000000E+00
+Evolution, Temp., (0=const., 1=lin.) 0
+Temperature, fin de charg.  0.00000000E+00
+ 
+ 
+STRUCTURE INITLOADEXT, pinceau 0
+Temperature non initialisee par l'utilisateur 
+Nombre de parametres exterieurs 0
+Temperature initiale  0.00000000E+00
+ 
+ 
+STRUCTURE PARAM_EXTRACT, pinceau 0
+Nombre de pas de temps ou extraire des fichiers vtk  1
+Nombre de pas de temps ou extraire des fichiers zstd 0
+Sortie vtk des FluxD  F
+Sortie vtk des GradD  F
+Sortie des moyennes par zone pour le materiau 1 :  F
+Nombre de sortie .zstd pour le chargement 1 : 0
+ 
+Nombre de sortie .std pour le chargement 1 : 1
+ 
+Duration TOTAL INITAIALIZATION (s) :  0.12166449E+03
+
+==================================================
+Pas de temps fictif :       0.5
+
+-----------------------------
+
+pas de chargement fictif        0.5
+      10 iterations
+criteres d'equilibre                (meca,diff) : 0.67576637-309 ,  0.52028423E-02
+criteres sur la contrainte moyenne  (meca,diff) : 0.00000000E+00 ,  0.00000000E+00
+criteres de compatibilite           (meca,diff) : 0.31265727E-45 ,  0.00000000E+00
+criteres sur la deformation moyenne (meca,diff) : 0.24703282-322 ,  0.00000000E+00
+Temps total apres initialisation : 0.13264850E+02
+Temps des 10 dernieres iterations : 0.12642682E+02
+Temps :
+FFT_contrainte IFFT_deformation     umat        apply_green   eval_criteres  ecriture
+ 0.25761644E+01 0.31125277E+01 0.36899454E+01 0.87428096E+00 0.33858860E+00 0.11683100E-03
+
+-----------------------------
+
+pas de chargement fictif        0.5
+      20 iterations
+criteres d'equilibre                (meca,diff) : 0.67576637-309 ,  0.21111664E-02
+criteres sur la contrainte moyenne  (meca,diff) : 0.00000000E+00 ,  0.00000000E+00
+criteres de compatibilite           (meca,diff) : 0.31265727E-45 ,  0.00000000E+00
+criteres sur la deformation moyenne (meca,diff) : 0.24703282-322 ,  0.00000000E+00
+Temps total apres initialisation : 0.24736474E+02
+Temps des 10 dernieres iterations : 0.11471503E+02
+Temps :
+FFT_contrainte IFFT_deformation     umat        apply_green   eval_criteres  ecriture
+ 0.49175523E+01 0.59346373E+01 0.67482713E+01 0.16677277E+01 0.64826304E+00 0.29372500E-03
+
+-----------------------------
+
+pas de chargement fictif        0.5
+      30 iterations
+criteres d'equilibre                (meca,diff) : 0.67576637-309 ,  0.10296448E-02
+criteres sur la contrainte moyenne  (meca,diff) : 0.00000000E+00 ,  0.00000000E+00
+criteres de compatibilite           (meca,diff) : 0.31265727E-45 ,  0.00000000E+00
+criteres sur la deformation moyenne (meca,diff) : 0.24703282-322 ,  0.00000000E+00
+Temps total apres initialisation : 0.36220156E+02
+Temps des 10 dernieres iterations : 0.11483502E+02
+Temps :
+FFT_contrainte IFFT_deformation     umat        apply_green   eval_criteres  ecriture
+ 0.72570770E+01 0.87753379E+01 0.98254278E+01 0.24679999E+01 0.96718261E+00 0.41504400E-03
+
+-----------------------------
+
+pas de chargement fictif        0.5
+      40 iterations
+criteres d'equilibre                (meca,diff) : 0.67576637-309 ,  0.39184931E-03
+criteres sur la contrainte moyenne  (meca,diff) : 0.00000000E+00 ,  0.00000000E+00
+criteres de compatibilite           (meca,diff) : 0.31265727E-45 ,  0.00000000E+00
+criteres sur la deformation moyenne (meca,diff) : 0.24703282-322 ,  0.00000000E+00
+Temps total apres initialisation : 0.48466259E+02
+Temps des 10 dernieres iterations : 0.12245978E+02
+Temps :
+FFT_contrainte IFFT_deformation     umat        apply_green   eval_criteres  ecriture
+ 0.96093980E+01 0.11627931E+02 0.12886817E+02 0.32727403E+01 0.12837429E+01 0.51934100E-03
+
+-----------------------------
+
+pas de chargement fictif        0.5
+      50 iterations
+criteres d'equilibre                (meca,diff) : 0.67576637-309 ,  0.21108355E-03
+criteres sur la contrainte moyenne  (meca,diff) : 0.00000000E+00 ,  0.00000000E+00
+criteres de compatibilite           (meca,diff) : 0.31265727E-45 ,  0.00000000E+00
+criteres sur la deformation moyenne (meca,diff) : 0.24703282-322 ,  0.00000000E+00
+Temps total apres initialisation : 0.60157585E+02
+Temps des 10 dernieres iterations : 0.11691218E+02
+Temps :
+FFT_contrainte IFFT_deformation     umat        apply_green   eval_criteres  ecriture
+ 0.11967647E+02 0.14456293E+02 0.15960150E+02 0.40748006E+01 0.15942499E+01 0.62566200E-03
+
+-----------------------------
+
+pas de chargement fictif        0.5
+      60 iterations
+criteres d'equilibre                (meca,diff) : 0.67576637-309 ,  0.14140104E-03
+criteres sur la contrainte moyenne  (meca,diff) : 0.00000000E+00 ,  0.00000000E+00
+criteres de compatibilite           (meca,diff) : 0.31265727E-45 ,  0.00000000E+00
+criteres sur la deformation moyenne (meca,diff) : 0.24703282-322 ,  0.00000000E+00
+Temps total apres initialisation : 0.71848361E+02
+Temps des 10 dernieres iterations : 0.11690666E+02
+Temps :
+FFT_contrainte IFFT_deformation     umat        apply_green   eval_criteres  ecriture
+ 0.14326027E+02 0.17298507E+02 0.19023059E+02 0.48758455E+01 0.19045976E+01 0.72566100E-03
+
+-----------------------------
+
+pas de chargement fictif        0.5
+      70 iterations
+criteres d'equilibre                (meca,diff) : 0.67576637-309 ,  0.10219124E-03
+criteres sur la contrainte moyenne  (meca,diff) : 0.00000000E+00 ,  0.00000000E+00
+criteres de compatibilite           (meca,diff) : 0.31265727E-45 ,  0.00000000E+00
+criteres sur la deformation moyenne (meca,diff) : 0.24703282-322 ,  0.00000000E+00
+Temps total apres initialisation : 0.84084880E+02
+Temps des 10 dernieres iterations : 0.12236415E+02
+Temps :
+FFT_contrainte IFFT_deformation     umat        apply_green   eval_criteres  ecriture
+ 0.16679886E+02 0.20123232E+02 0.22084692E+02 0.56781138E+01 0.22133952E+01 0.91184300E-03
+
+--------------------------------------------------
+Fin du pas de chargement fictif :       0.5
+Nombre d'iterations     :      72
+criteres d'equilibre                (meca,diff) : 0.67576637-309 ,  0.93572089E-04
+criteres sur la contrainte moyenne  (meca,diff) : 0.00000000E+00 ,  0.00000000E+00
+criteres de compatibilite           (meca,diff) : 0.31265727E-45 ,  0.17214573E-15
+criteres sur la deformation moyenne (meca,diff) : 0.24703282-322 ,  0.00000000E+00
+Temps total             : 0.85412463E+02
+FFT_contrainte IFFT_deformation     umat        appli_green   eval_criteres  ecriture
+Temps total :
+ 0.17152086E+02 0.20408459E+02 0.22397457E+02 0.57584876E+01 0.22972308E+01 0.18913270E-01
+Temps pour le pas de chargement :
+ 0.17152086E+02 0.20408459E+02 0.22397457E+02 0.57584876E+01 0.22972308E+01 0.18913270E-01
+Temps total pris par le pas de chargement  0.85430406E+02
+==================================================
+==================================================
+
+
+
+==================================================
+Pas de temps :       1
+
+-----------------------------
+
+pas de chargement        1
+      10 iterations
+criteres d'equilibre                (meca,diff) : 0.67576637-309 ,  0.78102698E-02
+criteres sur la contrainte moyenne  (meca,diff) : 0.00000000E+00 ,  0.00000000E+00
+criteres de compatibilite           (meca,diff) : 0.31265727E-45 ,  0.00000000E+00
+criteres sur la deformation moyenne (meca,diff) : 0.24703282-322 ,  0.00000000E+00
+Temps total apres initialisation : 0.98761030E+02
+Temps des 10 dernieres iterations : 0.12709052E+02
+Temps :
+FFT_contrainte IFFT_deformation     umat        apply_green   eval_criteres  ecriture
+ 0.19742371E+02 0.23515442E+02 0.26080816E+02 0.66404940E+01 0.26329945E+01 0.19026444E-01
+
+-----------------------------
+
+pas de chargement        1
+      20 iterations
+criteres d'equilibre                (meca,diff) : 0.67576637-309 ,  0.31730453E-02
+criteres sur la contrainte moyenne  (meca,diff) : 0.00000000E+00 ,  0.00000000E+00
+criteres de compatibilite           (meca,diff) : 0.31265727E-45 ,  0.00000000E+00
+criteres sur la deformation moyenne (meca,diff) : 0.24703282-322 ,  0.00000000E+00
+Temps total apres initialisation : 0.11028264E+03
+Temps des 10 dernieres iterations : 0.11521504E+02
+Temps :
+FFT_contrainte IFFT_deformation     umat        apply_green   eval_criteres  ecriture
+ 0.22094667E+02 0.26359286E+02 0.29163585E+02 0.74441844E+01 0.29449187E+01 0.19131001E-01
+
+-----------------------------
+
+pas de chargement        1
+      30 iterations
+criteres d'equilibre                (meca,diff) : 0.67576637-309 ,  0.15509537E-02
+criteres sur la contrainte moyenne  (meca,diff) : 0.00000000E+00 ,  0.00000000E+00
+criteres de compatibilite           (meca,diff) : 0.31265727E-45 ,  0.00000000E+00
+criteres sur la deformation moyenne (meca,diff) : 0.24703282-322 ,  0.00000000E+00
+Temps total apres initialisation : 0.12181226E+03
+Temps des 10 dernieres iterations : 0.11529508E+02
+Temps :
+FFT_contrainte IFFT_deformation     umat        apply_green   eval_criteres  ecriture
+ 0.24447865E+02 0.29208293E+02 0.32252622E+02 0.82479154E+01 0.32570114E+01 0.19235588E-01
+
+-----------------------------
+
+pas de chargement        1
+      40 iterations
+criteres d'equilibre                (meca,diff) : 0.67576637-309 ,  0.57472491E-03
+criteres sur la contrainte moyenne  (meca,diff) : 0.00000000E+00 ,  0.00000000E+00
+criteres de compatibilite           (meca,diff) : 0.31265727E-45 ,  0.00000000E+00
+criteres sur la deformation moyenne (meca,diff) : 0.24703282-322 ,  0.00000000E+00
+Temps total apres initialisation : 0.13407247E+03
+Temps des 10 dernieres iterations : 0.12260104E+02
+Temps :
+FFT_contrainte IFFT_deformation     umat        apply_green   eval_criteres  ecriture
+ 0.26796887E+02 0.32061807E+02 0.35327816E+02 0.90510544E+01 0.35677590E+01 0.19342690E-01
+
+-----------------------------
+
+pas de chargement        1
+      50 iterations
+criteres d'equilibre                (meca,diff) : 0.67576637-309 ,  0.27728565E-03
+criteres sur la contrainte moyenne  (meca,diff) : 0.00000000E+00 ,  0.00000000E+00
+criteres de compatibilite           (meca,diff) : 0.31265727E-45 ,  0.00000000E+00
+criteres sur la deformation moyenne (meca,diff) : 0.24703282-322 ,  0.00000000E+00
+Temps total apres initialisation : 0.14582133E+03
+Temps des 10 dernieres iterations : 0.11748744E+02
+Temps :
+FFT_contrainte IFFT_deformation     umat        apply_green   eval_criteres  ecriture
+ 0.29147050E+02 0.34920313E+02 0.38417694E+02 0.98559797E+01 0.38798280E+01 0.19513723E-01
+
+-----------------------------
+
+pas de chargement        1
+      60 iterations
+criteres d'equilibre                (meca,diff) : 0.67576637-309 ,  0.16617951E-03
+criteres sur la contrainte moyenne  (meca,diff) : 0.00000000E+00 ,  0.00000000E+00
+criteres de compatibilite           (meca,diff) : 0.31265727E-45 ,  0.00000000E+00
+criteres sur la deformation moyenne (meca,diff) : 0.24703282-322 ,  0.00000000E+00
+Temps total apres initialisation : 0.15757273E+03
+Temps des 10 dernieres iterations : 0.11751225E+02
+Temps :
+FFT_contrainte IFFT_deformation     umat        apply_green   eval_criteres  ecriture
+ 0.31508911E+02 0.37775177E+02 0.41513811E+02 0.10661737E+02 0.41910376E+01 0.19620725E-01
+
+-----------------------------
+
+pas de chargement        1
+      70 iterations
+criteres d'equilibre                (meca,diff) : 0.67576637-309 ,  0.10705708E-03
+criteres sur la contrainte moyenne  (meca,diff) : 0.00000000E+00 ,  0.00000000E+00
+criteres de compatibilite           (meca,diff) : 0.31265727E-45 ,  0.00000000E+00
+criteres sur la deformation moyenne (meca,diff) : 0.24703282-322 ,  0.00000000E+00
+Temps total apres initialisation : 0.16983685E+03
+Temps des 10 dernieres iterations : 0.12264018E+02
+Temps :
+FFT_contrainte IFFT_deformation     umat        apply_green   eval_criteres  ecriture
+ 0.33859789E+02 0.40615423E+02 0.44567914E+02 0.11465319E+02 0.44967982E+01 0.19730452E-01
+Temps ecriture VTK :  0.18265000E-04
+
+--------------------------------------------------
+Fin du pas de chargement :       1
+Nombre d'iterations     :      72
+criteres d'equilibre                (meca,diff) : 0.67576637-309 ,  0.94838037E-04
+criteres sur la contrainte moyenne  (meca,diff) : 0.00000000E+00 ,  0.00000000E+00
+criteres de compatibilite           (meca,diff) : 0.31265727E-45 ,  0.10896854E-14
+criteres sur la deformation moyenne (meca,diff) : 0.24703282-322 ,  0.00000000E+00
+Temps total             : 0.17119089E+03
+FFT_contrainte IFFT_deformation     umat        appli_green   eval_criteres  ecriture
+Temps total :
+ 0.34329854E+02 0.40897850E+02 0.44876322E+02 0.11545592E+02 0.45796536E+01 0.69658302E-01
+Temps pour le pas de chargement :
+ 0.17177768E+02 0.20489391E+02 0.22478865E+02 0.57871041E+01 0.22824229E+01 0.50737117E-01
+Temps total pris par le pas de chargement  0.85778300E+02
+==================================================
+==================================================
+
+
+nombre total d'iterations :
+         144
+temps total ecritures = 0.69666889E-01
+temps global (hors initialisations) = 0.17131599E+03

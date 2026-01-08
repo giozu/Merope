@@ -1,0 +1,9 @@
+#  1ere colonne : le temps
+#  Quantites DIFFUSION
+#  2-4e colonne : le flux moyen (1) en x,y,z
+#  5-7e colonne : le gradient moyen (1) en x,y,z
+#  8-10e colonne : l'ecart-type du flux (1) en x,y,z
+#  11-13e colonne : l'ecart-type du gradient (1) en x,y,z
+#  13e colonne : nombre d'iterations necessaires pour ce pas de chargement
+ 0.00000000E+00 0.00000000E+00 0.00000000E+00 0.00000000E+00 0.00000000E+00 0.00000000E+00 0.00000000E+00 0.00000000E+00 0.00000000E+00 0.00000000E+00 0.00000000E+00 0.00000000E+00 0.00000000E+00  0
+ 0.10000000E+01 0.34271561E-03 -0.12226810E-02 -0.70064322E+00 -0.87702415E-19 0.98225428E-16 0.25443114E-15 0.12292575E+00 0.12256320E+00 0.31410797E+00 0.26747945E+00 0.26856798E+00 0.42253654E+00 177
