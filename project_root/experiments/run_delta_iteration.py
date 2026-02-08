@@ -5,7 +5,8 @@ import numpy as np
 import merope
 
 L = [10, 10, 10]
-N3D = 100
+N3D = 200
+K_THERMAL = [0.0, 1.0, 1e-3]
 
 def main():
     pm = ProjectManager()
@@ -19,11 +20,17 @@ def main():
             # Pure Interconnected porosity sweep
             inter = builder.generate_polycrystal(grain_radius=3.0, delta=d)
             struct = merope.Structure_3D(inter, {3: 0})
+
+            fractions = builder.voxellate(struct, K_THERMAL)
             
-            fractions = builder.voxellate(struct, [1.0, 1.0, 1e-3])
             results = solver.solve()
             
-            log_data = {"Delta": d, "Porosity": fractions[2], **results}
+            log_data = {
+                "Delta": d, 
+                "Porosity": fractions.get(2, 0.0), 
+                **results
+            }
+
             pm.log_results("../summary.txt", log_data, header=list(log_data.keys()))
 
 if __name__ == "__main__":
