@@ -4,7 +4,7 @@ from core.utils import ProjectManager
 
 # Config
 L_DIM = [10, 10, 10]
-N_VOX = 120
+N_VOX = 150
 
 # Index 0: ignored
 # Index 1: Matrix (K=1.0)
@@ -21,9 +21,9 @@ def main():
     # PARAMETERS
     # Increase delta so it's visible at N=120 (delta 0.2 is approx 2.5 voxels thick)
     DELTA_GB = 0.2 
-    S_RADIUS = 0.5 # Larger spheres are easier to see
+    S_RADIUS = 0.1
 
-    for phi_intra in [0.05, 0.10, 0.15]:
+    for phi_intra in [0.15]:
         folder = f"Results_Mixed/Intra_{phi_intra}"
         with pm.cd(folder):
             # Generate
@@ -37,8 +37,9 @@ def main():
             fractions = builder.voxellate(struct, K_THERMAL)
             
             # Solve
-            results = solver.solve()
-            
+            # results = solver.solve()
+            results = {"Kxx": 0, "Kyy": 0, "Kzz": 0, "Kmean": 0}    
+        
             # Log (Pore is Phase 2)
             porosity = fractions.get(2, 0.0)
 

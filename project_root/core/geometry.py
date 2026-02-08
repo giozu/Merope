@@ -14,7 +14,6 @@ class MicrostructureBuilder:
         """Creates a Laguerre tessellation with optional grain boundary layers."""
         sph = merope.SphereInclusions_3D()
         sph.setLength(self.L)
-        # RSA used to seed the tessellation
         sph.fromHisto(self.seed, sac_de_billes.TypeAlgo.RSA, 0., [[grain_radius, 1.0]], [1])
         
         poly = merope.LaguerreTess_3D(self.L, sph.getSpheres())
@@ -25,11 +24,11 @@ class MicrostructureBuilder:
         
         ids = multi.getAllIdentifiers()
         if delta > 0:
-            multi.addLayer(ids, 2, delta) # Usa la Fase 2, non la 3!
+            multi.addLayer(ids, 2, delta) # Usa la Fase 2
 
         multi.changePhase(ids, [1 for _ in ids]) # Fase 1 = Matrice
 
-        return merope.Structure_3D(multi) # Restituisci Structure_3D, non MultiInclusions
+        return merope.Structure_3D(multi)
 
     def generate_spheres(self, radii_phi_list, phase_id=2):
         """Creates distributed spherical inclusions."""
@@ -60,28 +59,32 @@ class MicrostructureBuilder:
         m_spheres = merope.MultiInclusions_3D()
         sph_obj = merope.SphereInclusions_3D()
         sph_obj.setLength(self.L)
-        sph_obj.fromHisto(self.seed, sac_de_billes.TypeAlgo.BOOL, 0., intra_pore_list, [2])
+        sph_obj.fromHisto(self.seed, sac_de_billes.TypeAlgo.BOOL, 0., intra_pore_list, [3])
         m_spheres.setInclusions(sph_obj)
 
         # 3. Combine
-        return merope.Structure_3D(m_spheres, m_grains, {1: 1, 2: 2})
-        
+        # Trasforma in Structure_3D prima di unire
+        s_grains = merope.Structure_3D(m_grains)
+        s_spheres = merope.Structure_3D(m_spheres)
+
+        return merope.Structure_3D(s_grains, s_spheres, {3: 2, 0: -1})
+
     def voxellate(self, structure, K_values, vtk_name="structure.vtk"):
         # Create Grid Representation
-        grid_repr = merope.vox.GridRepresentation_3D(structure, self.grid_params, merope.vox.VoxelRule.Average)
-        
-        # Apply Thermal Coeffs (Crucial: bakes the phases into the grid)
-        grid_repr.apply_homogRule(merope.HomogenizationRule.Voigt, K_values)
-        
+        grid_params = self.grid_params
+        grid_repr = merope.vox.GridRepresentation_3D(structure, grid_params, merope.vox.VoxelRule.Average)
+
         # SAFE ANALYZER LOGIC
         fractions = {1: 0.0, 2: 0.0}
         try:
             analyzer = merope.vox.GridAnalyzer_3D()
-            # Try computing from structure + params directly (often more stable)
             fractions = analyzer.compute_percentages(grid_repr)
             print(f"Voxellation complete. Detected Phases: {fractions}")
         except Exception as e:
             print(f"Analyzer skipped due to: {e}")
+
+        # Apply Thermal Coeffs (Crucial: bakes the phases into the grid)
+        grid_repr.apply_homogRule(merope.HomogenizationRule.Voigt, K_values)
 
         # Export for Amitex
         printer = merope.vox.vtk_printer_3D()

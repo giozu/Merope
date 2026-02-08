@@ -37,7 +37,7 @@ def main():
                 **results
             }
             pm.log_results("../summary.txt", log_data, header=list(log_data.keys()))
-            print(f"Finished AR: {ar:.2f} | Porosity: {log_data['Porosity']:.4f}")
+            print(f"Finished Aspect Ratio: {ar:.2f} | Porosity: {log_data['Porosity']:.4f}")
 
 if __name__ == "__main__":
     main()
