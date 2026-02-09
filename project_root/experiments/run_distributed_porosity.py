@@ -11,11 +11,13 @@ from core.utils import ProjectManager
 
 # --- CONFIGURAZIONE ---
 L_DIM = [10.0, 10.0, 10.0]
-N_VOX = 120            # Number of voxels per side
-SPHERE_R = 0.5         # Radius of spherical pores
+N_VOX = 120 # Number of voxels per side
+
+# SPHERE_R_VALUES = [0.2, 0.4, 0.5, 0.6, 0.8] # Radii of spherical pores to test
+SPHERE_R_VALUES = [0.4, 0.6]
 
 # Range of porosity to test (5% - 25%)
-PHI_VALUES = [0.05, 0.10, 0.15, 0.20, 0.25]
+PHI_VALUES = [0.05, 0.20]
 
 # Thermal properties (convention: 0 = matrix, 2 = pores)
 K_MAT = 1.0
@@ -57,73 +59,77 @@ def main() -> None:
 
         print("=== VALIDATION OF DISTRIBUTED POROSITY (SPHERES ONLY) ===")
 
-        for phi_target in PHI_VALUES:
-            print(f"\n--- Simulating Sphere Porosity: {phi_target * 100:.1f}% ---")
+        for r_sphere in SPHERE_R_VALUES:
+            print(f"\n# === Simulating Sphere Radius: {r_sphere} ===")
 
-            # 1. Generate structure: homogeneous matrix + distributed spherical pores
-            multi = builder.generate_spheres([[SPHERE_R, phi_target]], phase_id=2)
-            # Phase 0 = matrix, phase 2 = pores; consistent with K_THERMAL
-            import merope
+            for phi_target in PHI_VALUES:
+                print(f"\n--- Simulating Sphere Porosity: {phi_target * 100:.1f}% (R={r_sphere}) ---")
 
-            struct = merope.Structure_3D(multi)
+                # 1. Generate structure: homogeneous matrix + distributed spherical pores
+                multi = builder.generate_spheres([[r_sphere, phi_target]], phase_id=2)
+                # Phase 0 = matrix, phase 2 = pores; consistent with K_THERMAL
+                import merope
 
-            # Geometric/resolution parameters for this case
-            L_RVE = float(builder.L[0])  # cubic RVE
-            n_vox = float(builder.n3D)
-            L_voxel = L_RVE / n_vox
-            ratio_LR = L_RVE / float(SPHERE_R)          # representativity: L_RVE / R_pore
-            ratio_Rlvox = float(SPHERE_R) / L_voxel     # resolution: R_pore / L_voxel
+                struct = merope.Structure_3D(multi)
 
-            # 2. Setup case folder and change directory with ProjectManager
-            sub_dir = output_dir / f"Phi_{phi_target}"
-            with pm.cd(str(sub_dir)):
-                try:
-                    # 3. Voxelization (writes structure.vtk + Coeffs.txt in the case folder)
-                    fractions = builder.voxellate(struct, K_THERMAL)
+                # Geometric/resolution parameters for this case
+                L_RVE = float(builder.L[0])  # cubic RVE
+                n_vox = float(builder.n3D)
+                L_voxel = L_RVE / n_vox
+                ratio_LR = L_RVE / float(r_sphere)          # representativity: L_RVE / R_pore
+                ratio_Rlvox = float(r_sphere) / L_voxel     # resolution: R_pore / L_voxel
 
-                    # 4. AMITEX Solver (uses structure.vtk in the CWD)
-                    res = solver.solve()
+                # 2. Setup case folder and change directory with ProjectManager
+                # Structure: Results/R_0.5/Phi_0.10
+                sub_dir = output_dir / f"R_{r_sphere}" / f"Phi_{phi_target}"
+                with pm.cd(str(sub_dir)):
+                    try:
+                        # 3. Voxelization (writes structure.vtk + Coeffs.txt in the case folder)
+                        fractions = builder.voxellate(struct, K_THERMAL)
 
-                    # 5. Data collection
-                    phi_real = fractions.get(2, 0.0)
-                    k_eff = res["Kmean"]
-                    k_theory = maxwell_eucken(phi_real, K_MAT, K_PORE)
-                    error_perc = abs(k_eff - k_theory) / k_theory * 100.0
+                        # 4. AMITEX Solver (uses structure.vtk in the CWD)
+                        res = solver.solve()
 
-                    # Quality control on pore resolution
-                    if ratio_Rlvox < 5.0:
+                        # 5. Data collection
+                        phi_real = fractions.get(2, 0.0)
+                        k_eff = res["Kmean"]
+                        k_theory = maxwell_eucken(phi_real, K_MAT, K_PORE)
+                        error_perc = abs(k_eff - k_theory) / k_theory * 100.0
+
+                        # Quality control on pore resolution
+                        if ratio_Rlvox < 5.0:
+                            print(
+                                f"   [WARNING] R_pore/L_voxel = {ratio_Rlvox:.2f} < 5. "
+                                "Pore shape is under-resolved."
+                            )
+
+                        # Compact final print for each iteration
                         print(
-                            f"   [WARNING] R_pore/L_voxel = {ratio_Rlvox:.2f} < 5. "
-                            "Pore shape is under-resolved."
+                            "   Target: {t:.4f} | Real: {pr:.4f} | "
+                            "K_Sim: {ks:.4f} | K_Max: {km:.4f} | R/l_vox: {rlv:.2f}".format(
+                                t=phi_target,
+                                pr=phi_real,
+                                ks=k_eff,
+                                km=k_theory,
+                                rlv=ratio_Rlvox,
+                            )
+                        )
+                        print(f"   -> Error vs Analytical model (Maxwell): {error_perc:.2f}%")
+
+                        results_list.append(
+                            {
+                                "Phi_Requested": phi_target,
+                                "Phi_Real": phi_real,
+                                "K_Simulation": k_eff,
+                                "K_Maxwell": k_theory,
+                                "Ratio_LR": ratio_LR,
+                                "Ratio_Rlvox": ratio_Rlvox,
+                                "R_pore": float(r_sphere),
+                            }
                         )
 
-                    # Compact final print for each iteration
-                    print(
-                        "   Target: {t:.4f} | Real: {pr:.4f} | "
-                        "K_Sim: {ks:.4f} | K_Max: {km:.4f} | R/l_vox: {rlv:.2f}".format(
-                            t=phi_target,
-                            pr=phi_real,
-                            ks=k_eff,
-                            km=k_theory,
-                            rlv=ratio_Rlvox,
-                        )
-                    )
-                    print(f"   -> Error vs Analytical model (Maxwell): {error_perc:.2f}%")
-
-                    results_list.append(
-                        {
-                            "Phi_Requested": phi_target,
-                            "Phi_Real": phi_real,
-                            "K_Simulation": k_eff,
-                            "K_Maxwell": k_theory,
-                            "Ratio_LR": ratio_LR,
-                            "Ratio_Rlvox": ratio_Rlvox,
-                            "R_pore": float(SPHERE_R),
-                        }
-                    )
-
-                except Exception as e:
-                    print(f"Error during case Phi={phi_target}: {e}")
+                    except Exception as e:
+                        print(f"Error during case Phi={phi_target}: {e}")
 
         # --- SAVE RESULTS ---
         if not results_list:
@@ -223,7 +229,7 @@ def main() -> None:
     plt.grid(True, linestyle="--", alpha=0.5)
     plt.xlabel("Pore Radius (R_pore)")
     plt.ylabel("Effective Thermal Conductivity (K_eff)")
-    plt.title(f"K_eff vs Pore Radius (R_pore = {SPHERE_R:.2f} constant)")
+    plt.title("K_eff vs Pore Radius")
     img_path = output_dir / "K_eff_vs_R_pore.png"
     plt.savefig(img_path, dpi=300)
     plt.close()
