@@ -213,7 +213,9 @@ def evaluate_slices(
             sl = slicer(int(idx))
             sl_uint8 = (sl * 255 / vmax).astype(np.uint8)
             name = f"slice_{axis_name}_{count:04d}.png"
-            Image.fromarray(sl_uint8).save(os.path.join(temp_dir, name))
+            img = Image.fromarray(sl_uint8)
+            img = img.resize((img.width * 4, img.height * 4), Image.Resampling.NEAREST)
+            img.save(os.path.join(temp_dir, name))
             slice_names.append(name)
 
     # ── comparison ─────────────────────────────────────────────────────

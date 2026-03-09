@@ -35,6 +35,7 @@ Output (written to Results_Optimization_<mode>/):
 How to run:
     # Porosità DISTRIBUITA
     python3 experiments/run_optimization.py --mode distributed --n-calls 20
+    python3 experiments/run_optimization.py --mode distributed --n-calls 20 --n3d 150
 
     # Porosità INTERCONNESSA
     python3 experiments/run_optimization.py --mode interconnected --n-calls 20
@@ -291,7 +292,7 @@ def _build_and_score_interconnected(
 def _make_space_distributed() -> List:
     return [
         Real(np.log(0.05), np.log(2.0), name="mean_radius"),
-        Real(0.01, 0.50,                name="std_radius"),
+        Real(0.10, 0.60,                name="std_radius"),   # min 0.10: avoids trivial monodisperse solution
     ]
 
 
