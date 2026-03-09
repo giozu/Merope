@@ -169,19 +169,21 @@ def run_simulations(output_dir: Path, no_solver: bool = False) -> pd.DataFrame:
                     print(f"   [!] Error {error_perc:.2f}% > {MAX_ERROR_PERC}%. Retrying with N_VOX = {current_n_vox}...")
                     continue
                 
-                # If error is fine or we hit max N_VOX, keep the result and break
+                # Save results
+                rows.append({
+                    "Phi_Target":  phi_target,
+                    "Phi_Real":    phi_real,
+                    "K_mean":      k_eff,
+                    "K_Maxwell":   k_maxw,
+                    "K_Loeb":      k_loeb,
+                    "Error_Perc":  error_perc,
+                    "Ratio_LR":    ratio_LR,
+                    "Ratio_Rlvox": ratio_Rlvox,
+                    "N_Vox":       current_n_vox
+                })
+                
+                # If error is fine or we hit max N_VOX, we break out of the while loop
                 break
-            rows.append({
-                "Phi_Target":  phi_target,
-                "Phi_Real":    phi_real,
-                "K_mean":      k_eff,
-                "K_Maxwell":   k_maxw,
-                "K_Loeb":      k_loeb,
-                "Error_Perc":  error_perc,
-                "Ratio_LR":    ratio_LR,
-                "Ratio_Rlvox": ratio_Rlvox,
-                "N_Vox":       current_n_vox
-            })
 
     df = pd.DataFrame(rows)
     csv_path = output_dir / "keff_vs_porosity.csv"
