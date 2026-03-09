@@ -142,10 +142,10 @@ def compare_images(
     mask = norm_sim > 0
     f_obs = counts_real[mask].astype(float)
     f_exp = norm_sim[mask]
-    f_exp *= f_obs.sum() / f_exp.sum()   # re-normalise to same sum
-
-    if f_obs.size < 2:
+    if f_obs.sum() == 0 or f_exp.sum() == 0 or f_obs.size < 2:
         return ks_p, 0.0
+
+    f_exp *= f_obs.sum() / f_exp.sum()   # re-normalise to same sum
 
     _, chi_p = chisquare(f_obs=f_obs, f_exp=f_exp)
     return float(ks_p), float(chi_p)
