@@ -45,6 +45,7 @@ How to run:
     python3 experiments/run_optimization.py --mode test_interconnected --delta 0.08 --intra-phi 0.35 --intra-radius 0.50 --output test_alta_porosita.png
     python3 experiments/run_optimization.py --mode test_interconnected --delta 0.10 --intra-phi 0.02 --intra-radius 0.10 --output test_molto_inter.png
     python3 experiments/run_optimization.py --mode test_interconnected --delta 0.005 --intra-phi 0.30 --intra-radius 0.40 --output test_molto_intra.png
+    python3 experiments/run_optimization.py --mode test_interconnected --delta 0.08 --intra-phi 0.35 --intra-radius 0.50 --output test_alta_porosita.png
 
     # + Amitex alla fine per calcolare K_eff
     python3 experiments/run_optimization.py --mode distributed --n-calls 20 --run-amitex
