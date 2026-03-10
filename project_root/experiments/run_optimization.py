@@ -49,6 +49,8 @@ How to run:
 
     # + Amitex alla fine per calcolare K_eff
     python3 experiments/run_optimization.py --mode distributed --n-calls 20 --run-amitex
+    python3 experiments/run_optimization.py --mode interconnected --n-calls 50 --n3d 150
+    python3 experiments/run_optimization.py --mode interconnected --n-calls 50 --n3d 150 --run-amitex
 
 """
 
