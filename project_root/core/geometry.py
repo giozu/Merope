@@ -381,78 +381,90 @@ class MicrostructureBuilder:
         if delta < 0.0:
             raise ValueError(f"delta must be non-negative, got {delta}")
 
+    def generate_interconnected_structure(
+        self,
+        inter_radius: float,
+        inter_phi: float,
+        intra_radius: float,
+        intra_phi: float,
+        grain_radius: float,
+        grain_phi: float,
+        delta: float,
+    ) -> "merope.Structure_3D":
+        """Generate interconnected structure matching MOX_structure_generator logic."""
+        import sac_de_billes
+        import merope
+
+        np.random.seed(self.seed)
         L = self.L
 
-        # Legacy-compatible phase indices
-        phase_grains = 0
-        phase_intra = 1
-        phase_inter = 2
-        phase_boundary = 3
+        phase_matrix = 0
+        phase_intra = 1  # Red spheres
+        phase_inter = 2  # Blue boundary network
 
-        # 1) Inter-granular pores ----------------------------------------
-        sph_inter = merope.SphereInclusions_3D()
-        sph_inter.setLength(L)
-        if inter_phi > 0.0:
-            sph_inter.fromHisto(
-                int(self.seed),
-                sac_de_billes.TypeAlgo.BOOL,
-                0.0,
-                [[float(inter_radius), float(inter_phi)]],
-                [phase_inter],
-            )
-        inter_pores = merope.MultiInclusions_3D()
-        inter_pores.setInclusions(sph_inter)
+        # -----------------------------------------------------------------
+        # 1) Generate identical grains for Base and Mask
+        # -----------------------------------------------------------------
+        # Base laguerre: Core = 0 (white matrix), Boundary = 2 (blue inter-pores)
+        sph_lag = merope.SphereInclusions_3D()
+        sph_lag.setLength(L)
+        sph_lag.fromHisto(
+            int(self.seed + 2), sac_de_billes.TypeAlgo.RSA, 0.0, [[float(grain_radius), float(grain_phi)]], [0]
+        )
+        spheres = sph_lag.getSpheres()
 
-        # 2) Intra-granular pores ----------------------------------------
+        tess_base = merope.LaguerreTess_3D(L, spheres)
+        grains_base = merope.MultiInclusions_3D()
+        grains_base.setInclusions(tess_base)
+        ids = grains_base.getAllIdentifiers()
+        grains_base.addLayer(ids, phase_inter, float(delta))  # outer layer = 2
+        grains_base.changePhase(ids, [phase_matrix for _ in ids])  # core = 0
+        struct_base = merope.Structure_3D(grains_base)
+
+        # Mask laguerre: Core = 0, Boundary = 1 (Activating mask)
+        tess_mask = merope.LaguerreTess_3D(L, spheres)
+        grains_mask = merope.MultiInclusions_3D()
+        grains_mask.setInclusions(tess_mask)
+        ids_m = grains_mask.getAllIdentifiers()
+        grains_mask.addLayer(ids_m, 1, float(delta))  # outer layer = 1
+        grains_mask.changePhase(ids_m, [phase_matrix for _ in ids_m])  # core = 0
+        struct_mask = merope.Structure_3D(grains_mask)
+
+        # -----------------------------------------------------------------
+        # 2) Generate Intra-granular pores (Red spheres, phase 1)
+        # -----------------------------------------------------------------
         sph_intra = merope.SphereInclusions_3D()
         sph_intra.setLength(L)
         if intra_phi > 0.0:
             sph_intra.fromHisto(
-                int(self.seed),
+                int(self.seed + 1),
                 sac_de_billes.TypeAlgo.BOOL,
                 0.0,
                 [[float(intra_radius), float(intra_phi)]],
                 [phase_intra],
             )
-        intra_pores = merope.MultiInclusions_3D()
-        intra_pores.setInclusions(sph_intra)
+        m_intra = merope.MultiInclusions_3D()
+        m_intra.setInclusions(sph_intra)
+        struct_intra = merope.Structure_3D(m_intra)
 
-        # 3) Laguerre grains + boundary layer ----------------------------
-        sph_lag = merope.SphereInclusions_3D()
-        sph_lag.setLength(L)
-        sph_lag.fromHisto(
-            int(self.seed),
-            sac_de_billes.TypeAlgo.RSA,
-            0.0,
-            [[float(grain_radius), float(grain_phi)]],
-            [1],  # temporary IDs for seeds
+        # -----------------------------------------------------------------
+        # 3) Restrict intra-pores to grain interiors
+        # -----------------------------------------------------------------
+        # Where struct_mask == 1 (the boundary network), map intra (1) -> matrix (0)
+        # This deletes all intra-pores that touch or overlap the inter-pore boundary,
+        # ensuring they stay strictly inside the grain cores.
+        struct_intra_restricted = merope.Structure_3D(
+            struct_intra, struct_mask, {phase_intra: phase_matrix}
         )
 
-        tess = merope.LaguerreTess_3D(L, sph_lag.getSpheres())
-        grains = merope.MultiInclusions_3D()
-        grains.setInclusions(tess)
-
-        ids = grains.getAllIdentifiers()
-        grains.addLayer(ids, phase_boundary, float(delta))
-        grains.changePhase(ids, [1 for _ in ids])  # temporary, see mapping below
-
-        # 4) Merge inter-pores + grains ----------------------------------
-        map_inter_boundary_to_grains = {
-            phase_inter: phase_grains,
-            phase_boundary: phase_grains,
-        }
-        struct_inter_on_grains = merope.Structure_3D(
-            inter_pores,
-            grains,
-            map_inter_boundary_to_grains,
-        )
-
-        # 5) Overlay intra-pores, force grains (0) → pores (2) where intra act
-        final_overlay_remap = {phase_grains: phase_inter}
+        # -----------------------------------------------------------------
+        # 4) Composite final image
+        # -----------------------------------------------------------------
+        # Now struct_intra_restricted has Phase 1 strictly inside the cores.
+        # We overlay this onto the base (which has 0 and 2).
+        # Where intra is 1, we replace matrix (0) with intra (1).
         final_struct = merope.Structure_3D(
-            struct_inter_on_grains,
-            intra_pores,
-            final_overlay_remap,
+            struct_base, struct_intra_restricted, {phase_matrix: phase_intra}
         )
 
         return final_struct

@@ -39,6 +39,7 @@ How to run:
 
     # Porosità INTERCONNESSA
     python3 experiments/run_optimization.py --mode interconnected --n-calls 20
+    python3 experiments/run_optimization.py --mode interconnected --n-calls 20 --n3d 150
 
     # + Amitex alla fine per calcolare K_eff
     python3 experiments/run_optimization.py --mode distributed --n-calls 20 --run-amitex
@@ -97,11 +98,11 @@ _TARGET_POROSITY = {
 # ---------------------------------------------------------------------------
 # Thermal conductivities (convention: index = phase id)
 # distributed:    phase 0=matrix, phase 2=pores  → K = [K_m, K_m, K_p]
-# interconnected: phase 0=matrix, phase 2=pores  → K = [K_m, K_m, K_p]
+# interconnected: phase 0=matrix, phase 1=intra-pores, phase 2=inter-pores.
 # ---------------------------------------------------------------------------
 K_MATRIX = 1.0
 K_GAS    = 1e-3
-K_THERMAL = [K_MATRIX, K_MATRIX, K_GAS]
+K_THERMAL = [K_MATRIX, K_GAS, K_GAS]
 
 
 # ---------------------------------------------------------------------------
@@ -220,18 +221,19 @@ def _build_and_score_interconnected(
     n_slices: int = fixed["n_slices"]
     grid_size: int = fixed["grid_size"]
 
-    delta     = float(params["delta"])
-    inter_phi = float(params["inter_phi"])
+    delta        = float(params["delta"])
+    intra_phi    = float(params.get("intra_phi", fixed["intra_phi"]))
+    intra_radius = float(params.get("intra_radius", fixed["intra_radius"]))
 
     try:
         struct = builder.generate_interconnected_structure(
-            inter_radius=fixed["inter_radius"],
-            inter_phi=inter_phi,
-            intra_radius=fixed["intra_radius"],
-            intra_phi=fixed["intra_phi"],
+            intra_radius=intra_radius,
+            intra_phi=intra_phi,
             grain_radius=fixed["grain_radius"],
             grain_phi=fixed["grain_phi"],
             delta=delta,
+            inter_radius=0.0,
+            inter_phi=0.0,
         )
 
         # Build grid and extract 3D array
@@ -246,7 +248,7 @@ def _build_and_score_interconnected(
         try:
             analyzer = merope.vox.GridAnalyzer_3D()
             fracs = analyzer.compute_percentages(grid)
-            phi_real = float(fracs.get(2, 0.0))
+            phi_real = float(fracs.get(1, 0.0) + fracs.get(2, 0.0))
         except Exception:
             phi_real = target_porosity  # fallback
 
@@ -298,8 +300,9 @@ def _make_space_distributed() -> List:
 
 def _make_space_interconnected() -> List:
     return [
-        Real(1e-4, 0.05, name="delta"),
-        Real(0.01, 0.40, name="inter_phi"),
+        Real(1e-4, 0.15, name="delta"),          # slightly wider: best was at 0.10 limit
+        Real(0.05, 0.40, name="intra_phi"),       # narrowed around best (0.10-0.17 range)
+        Real(0.10, 0.60, name="intra_radius"),    # tightened around best (0.34)
     ]
 
 
@@ -385,8 +388,11 @@ def main() -> None:
 
         @use_named_args(space)
         def objective(**params):
+            intra = params.get("intra_phi", fixed["intra_phi"])
+            r_intra = params.get("intra_radius", fixed["intra_radius"])
             print(f"\n[Call] delta={params['delta']:.5f}  "
-                  f"inter_phi={params['inter_phi']:.4f}")
+                  f"intra_phi={intra:.4f}  "
+                  f"intra_R={r_intra:.3f}")
             score = _build_and_score_interconnected(params, fixed, exp_image)
             return -score
 
@@ -456,19 +462,19 @@ def main() -> None:
             struct = merope.Structure_3D(multi)
         else:
             struct = builder.generate_interconnected_structure(
-                inter_radius=fixed["inter_radius"],
-                inter_phi=best_params["inter_phi"],
-                intra_radius=fixed["intra_radius"],
-                intra_phi=fixed["intra_phi"],
+                intra_radius=best_params.get("intra_radius", fixed["intra_radius"]),
+                intra_phi=best_params.get("intra_phi", fixed["intra_phi"]),
                 grain_radius=fixed["grain_radius"],
                 grain_phi=fixed["grain_phi"],
                 delta=best_params["delta"],
+                inter_radius=0.0,
+                inter_phi=0.0,
             )
 
         best_vtk_dir = str(output_dir / "best_geometry")
         with pm.cd(best_vtk_dir):
             fractions = builder.voxellate(struct, K_THERMAL)
-            phi_real = fractions.get(2, 0.0)
+            phi_real = fractions.get(1, 0.0) + fractions.get(2, 0.0)
 
             grid_params = merope.vox.create_grid_parameters_N_L_3D(
                 [builder.n3D] * 3, builder.L
@@ -483,6 +489,18 @@ def main() -> None:
             best_array3d = conv_np.compute_RealField(grid).reshape(
                 (builder.n3D,) * 3, order='C'
             )
+
+            # Recreate grid to extract colored phases for visualization
+            best_array3d_color = None
+            if mode == "interconnected":
+                grid_color = merope.vox.GridRepresentation_3D(
+                    struct, grid_params, merope.vox.VoxelRule.Average
+                )
+                K_COLOR = [255.0, 150.0, 0.0]  # 255=matrix, 150=intra, 0=inter
+                grid_color.apply_homogRule(merope.HomogenizationRule.Voigt, K_COLOR)
+                best_array3d_color = conv_np.compute_RealField(grid_color).reshape(
+                    (builder.n3D,) * 3, order='C'
+                )
 
             # ── Optional Amitex run ─────────────────────────────────────
             k_eff_result: Dict[str, float] = {}
@@ -512,6 +530,41 @@ def main() -> None:
                 f"Chi² p={best_slice_scores['chi']:.4f}  "
                 f"score={best_slice_scores['score']:.4f}"
             )
+
+            # Generate colored slice
+            if mode == "interconnected" and best_array3d_color is not None:
+                from PIL import Image
+                parts = best_slice_name.replace(".png", "").split("_")
+                axis_str = parts[1]
+                idx = int(parts[2])
+                
+                if axis_str == 'x':
+                    sl_color = best_array3d_color[idx, :, :]
+                elif axis_str == 'y':
+                    sl_color = best_array3d_color[:, idx, :]
+                else:
+                    sl_color = best_array3d_color[:, :, idx]
+                    
+                im_color = Image.fromarray(sl_color.astype(np.uint8), mode='L')
+                w, h = im_color.size
+                im_color = im_color.resize((w * 4, h * 4), resample=Image.NEAREST)
+                
+                arr_c = np.array(im_color)
+                r, g, b = np.zeros_like(arr_c), np.zeros_like(arr_c), np.zeros_like(arr_c)
+                
+                mask_matrix = (arr_c > 200)
+                r[mask_matrix], g[mask_matrix], b[mask_matrix] = 255, 255, 255
+                
+                mask_intra = (arr_c > 100) & (arr_c <= 200)
+                r[mask_intra], g[mask_intra], b[mask_intra] = 255, 50, 50  # Red
+                
+                mask_inter = (arr_c <= 100)
+                r[mask_inter], g[mask_inter], b[mask_inter] = 50, 50, 255  # Blue
+                
+                rgb_img = Image.fromarray(np.stack([r, g, b], axis=-1))
+                dst_color = str(output_dir / "best_slice_colored.png")
+                rgb_img.save(dst_color)
+                print(f"  Colored slice saved → {dst_color}")
 
         # ── Pore area distribution plot ─────────────────────────────────
         if best_eval["best"] is not None:
