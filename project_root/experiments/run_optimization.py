@@ -40,6 +40,11 @@ How to run:
     # Porosità INTERCONNESSA
     python3 experiments/run_optimization.py --mode interconnected --n-calls 20
     python3 experiments/run_optimization.py --mode interconnected --n-calls 20 --n3d 150
+    python3 experiments/run_optimization.py --mode test_interconnected --delta 0.024 --intra-phi 0.157 --intra-radius 0.600 --output test_ottima.png
+    python3 experiments/run_optimization.py --mode test_interconnected --delta 0.01 --intra-phi 0.05 --intra-radius 0.20 --output test_bassa_porosita.png
+    python3 experiments/run_optimization.py --mode test_interconnected --delta 0.08 --intra-phi 0.35 --intra-radius 0.50 --output test_alta_porosita.png
+    python3 experiments/run_optimization.py --mode test_interconnected --delta 0.10 --intra-phi 0.02 --intra-radius 0.10 --output test_molto_inter.png
+    python3 experiments/run_optimization.py --mode test_interconnected --delta 0.005 --intra-phi 0.30 --intra-radius 0.40 --output test_molto_intra.png
 
     # + Amitex alla fine per calcolare K_eff
     python3 experiments/run_optimization.py --mode distributed --n-calls 20 --run-amitex
@@ -306,6 +311,54 @@ def _make_space_interconnected() -> List:
     ]
 
 
+def _run_test_interconnected(args, builder: MicrostructureBuilder) -> None:
+    print(f"Generating structure with delta={args.delta}, intra_phi={args.intra_phi}, intra_radius={args.intra_radius}...")
+    import merope
+    import numpy as np
+
+    struct = builder.generate_interconnected_structure(
+        intra_radius=args.intra_radius,
+        intra_phi=args.intra_phi,
+        grain_radius=1.0,
+        grain_phi=1.0,
+        delta=args.delta,
+        inter_radius=0.0,
+        inter_phi=0.0,
+    )
+
+    grid_params = merope.vox.create_grid_parameters_N_L_3D([builder.n3D] * 3, builder.L)
+    analyzer = merope.vox.GridAnalyzer_3D()
+    grid = merope.vox.GridRepresentation_3D(struct, grid_params, merope.vox.VoxelRule.Average)
+    try:
+        fracs = analyzer.compute_percentages(grid)
+        print(f"Detected Volume Fractions: {fracs}")
+    except Exception as e:
+        print(f"Warning: analyzer skipped: {e}")
+
+    # Render color slice
+    K_COLOR = [255.0, 150.0, 0.0]  # 255=matrix, 150=intra, 0=inter
+    grid.apply_homogRule(merope.HomogenizationRule.Voigt, K_COLOR)
+    conv_np = merope.vox.NumpyConverter_3D()
+    best_array3d_color = conv_np.compute_RealField(grid).reshape((builder.n3D,) * 3, order='C')
+
+    from PIL import Image
+    slice_idx = builder.n3D // 2
+    sl_color = best_array3d_color[:, :, slice_idx]
+
+    h, w = sl_color.shape
+    rgb_im = np.zeros((h, w, 3), dtype=np.uint8)
+    mask_white = sl_color > 200
+    mask_red = (sl_color > 100) & (sl_color < 200)
+    mask_blue = sl_color < 50
+    rgb_im[mask_white] = [255, 255, 255]
+    rgb_im[mask_red] = [255, 50, 50]
+    rgb_im[mask_blue] = [50, 50, 255]
+
+    im = Image.fromarray(rgb_im)
+    im.save(args.output)
+    print(f"Saved color slice to {args.output}")
+
+
 # ---------------------------------------------------------------------------
 # main()
 # ---------------------------------------------------------------------------
@@ -315,8 +368,8 @@ def main() -> None:
         description="Bayesian optimization of Mérope microstructure parameters."
     )
     parser.add_argument(
-        "--mode", choices=["distributed", "interconnected"], required=True,
-        help="Type of porosity to calibrate."
+        "--mode", choices=["distributed", "interconnected", "test_interconnected"], required=True,
+        help="Type of porosity to calibrate or test."
     )
     parser.add_argument(
         "--exp-image", default=None,
@@ -334,11 +387,18 @@ def main() -> None:
         help="Number of 2D slices used for image comparison (default: 99).")
     parser.add_argument("--run-amitex", action="store_true",
         help="Run Amitex on the best geometry and report K_eff.")
+    
+    # testing parameters
+    parser.add_argument("--delta", type=float, help="Thickness of inter-granular pores (blue).")
+    parser.add_argument("--intra-phi", type=float, dest="intra_phi", help="Volume fraction target for intra-granular pores (red).")
+    parser.add_argument("--intra-radius", type=float, dest="intra_radius", help="Radius of intra-granular pores (red).")
+    parser.add_argument("--output", type=str, default="test_interconnected.png", help="Output PNG path.")
+
     args = parser.parse_args()
 
     mode = args.mode
-    exp_image = args.exp_image or _EXP_IMAGES[mode]
-    target_porosity = _TARGET_POROSITY[mode]
+    exp_image = args.exp_image or _EXP_IMAGES.get(mode)
+    target_porosity = _TARGET_POROSITY.get(mode, 0.0)
     n3d = args.n3d or (120 if mode == "distributed" else 150)
 
     # ── Output directory ─────────────────────────────────────────────────
@@ -351,6 +411,12 @@ def main() -> None:
 
     # ── Mérope builder ───────────────────────────────────────────────────
     builder = MicrostructureBuilder(L=[10.0, 10.0, 10.0], n3D=n3d, seed=args.seed)
+
+    if mode == "test_interconnected":
+        if args.delta is None or args.intra_phi is None or args.intra_radius is None:
+            parser.error("--delta, --intra-phi, and --intra-radius are required for testing.")
+        _run_test_interconnected(args, builder)
+        return
 
     # ── Fixed parameters shared by both modes ────────────────────────────
     fixed: Dict[str, Any] = {
@@ -545,7 +611,7 @@ def main() -> None:
                 else:
                     sl_color = best_array3d_color[:, :, idx]
                     
-                im_color = Image.fromarray(sl_color.astype(np.uint8), mode='L')
+                im_color = Image.fromarray(sl_color.astype(np.uint8))
                 w, h = im_color.size
                 im_color = im_color.resize((w * 4, h * 4), resample=Image.NEAREST)
                 
