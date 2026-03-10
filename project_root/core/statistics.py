@@ -44,6 +44,19 @@ import matplotlib.pyplot as plt
 # Low-level feature extractors
 # ---------------------------------------------------------------------------
 
+def _normalize(arr: np.ndarray) -> np.ndarray:
+    """Min-max rescale *arr* to [0, 255] uint8.
+
+    Ensures that images with different background brightness (e.g. synthetic
+    white-background slices vs. grey-background SEM images) are treated
+    consistently before Otsu thresholding.
+    """
+    lo, hi = float(arr.min()), float(arr.max())
+    if hi == lo:
+        return np.zeros_like(arr, dtype=np.uint8)
+    return ((arr.astype(np.float32) - lo) / (hi - lo) * 255).astype(np.uint8)
+
+
 def extract_pore_sizes(image_path: str, area_threshold: int = 30) -> np.ndarray:
     """Return equivalent diameters of pore regions detected in *image_path*.
 
@@ -60,7 +73,7 @@ def extract_pore_sizes(image_path: str, area_threshold: int = 30) -> np.ndarray:
     np.ndarray of shape (N,) with equivalent diameters ``2 * sqrt(A/π)``.
     """
     img = Image.open(image_path).convert("L")
-    arr = np.array(img)
+    arr = _normalize(np.array(img))           # contrast-normalize before Otsu
     thresh = threshold_otsu(arr)
     binary = arr < thresh                     # pores are dark
     labeled = label(binary)
@@ -81,7 +94,7 @@ def count_pores_in_grid(image_path: str, grid_size: int = 20) -> np.ndarray:
     np.ndarray of shape (grid_size²,) – flattened count map.
     """
     img = Image.open(image_path).convert("L")
-    arr = np.array(img)
+    arr = _normalize(np.array(img))           # contrast-normalize before Otsu
     thresh = threshold_otsu(arr)
     binary = arr < thresh
     labeled = label(binary)
@@ -249,37 +262,63 @@ def plot_area_distribution(
     exp_image_path: str,
     output_path: str = "area_distribution.png",
     area_threshold: int = 30,
+    exp_um_per_px: float = 1.0,
+    sim_um_per_px: float = 1.0,
 ) -> None:
     """Save a log-scale histogram comparing pore areas of two images.
 
     Parameters
     ----------
-    sim_image_path: path to the simulated (best) slice.
-    exp_image_path: path to the experimental reference image.
-    output_path:    where to save the PNG.
-    area_threshold: minimum area (pixels) used for filtering noise.
+    sim_image_path  : path to the simulated (best) slice.
+    exp_image_path  : path to the experimental reference image.
+    output_path     : where to save the PNG.
+    area_threshold  : minimum area in *experimental* pixels used for noise filtering.
+    exp_um_per_px   : physical scale of the experimental image  [µm / pixel].
+    sim_um_per_px   : physical scale of the simulated slice     [µm / pixel].
+                      Set both to convert the histogram x-axis to µm².
     """
     def _areas(path: str) -> List[float]:
         img = Image.open(path).convert("L")
-        arr = np.array(img)
+        arr = _normalize(np.array(img))       # contrast-normalize before Otsu
         thresh = threshold_otsu(arr)
         binary = arr < thresh
         lbl = label(binary)
         return [p.area for p in regionprops(lbl) if p.area >= area_threshold]
 
-    areas_sim = _areas(sim_image_path)
-    areas_exp = _areas(exp_image_path)
+    areas_sim_px = np.array(_areas(sim_image_path), dtype=float)
+    areas_exp_px = np.array(_areas(exp_image_path), dtype=float)
 
-    plt.figure(figsize=(8, 6))
-    plt.hist(areas_sim, bins=80, alpha=0.55, log=True, label="Simulated slice")
-    plt.hist(areas_exp, bins=80, alpha=0.55, log=True, label="Experimental")
-    plt.axvline(x=area_threshold, color="red", linestyle="--",
-                linewidth=1.5, label=f"Threshold ({area_threshold} px²)")
-    plt.xlabel("Pore area [pixel²]")
-    plt.ylabel("Counts (log)")
-    plt.title("Pore area distribution: simulation vs experiment")
-    plt.legend()
-    plt.grid(True, linestyle="--", alpha=0.4)
+    # Convert to physical area [µm²]
+    areas_sim_um2 = areas_sim_px * sim_um_per_px ** 2
+    areas_exp_um2 = areas_exp_px * exp_um_per_px ** 2
+    thr_um2 = area_threshold * exp_um_per_px ** 2
+
+    use_physical = (exp_um_per_px != 1.0 or sim_um_per_px != 1.0)
+    xlabel = "Pore area [µm²]" if use_physical else "Pore area [pixel²]"
+
+    # Shared bin edges in physical space
+    all_vals = np.concatenate([areas_sim_um2, areas_exp_um2])
+    bins = np.linspace(0, np.percentile(all_vals, 99.5), 81) if all_vals.size else 80
+
+    fig, ax = plt.subplots(figsize=(9, 6))
+    ax.hist(areas_sim_um2, bins=bins, alpha=0.55, log=True, label="Simulated slice")
+    ax.hist(areas_exp_um2, bins=bins, alpha=0.55, log=True, label="Experimental")
+    ax.axvline(x=thr_um2, color="red", linestyle="--",
+               linewidth=1.5, label=f"Threshold ({thr_um2:.0f} µm²)" if use_physical
+                                    else f"Threshold ({area_threshold} px²)")
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel("Counts (log)")
+    ax.set_title("Pore area distribution: simulation vs experiment")
+    ax.legend()
+    ax.grid(True, linestyle="--", alpha=0.4)
+
+    # Add a secondary x-axis showing pixel² if we are in physical mode
+    if use_physical:
+        ax2 = ax.twiny()
+        ax2.set_xlim(np.array(ax.get_xlim()) / exp_um_per_px ** 2)
+        ax2.set_xlabel("Pore area [pixel² — exp. scale]", fontsize=9, color="gray")
+        ax2.tick_params(axis="x", labelsize=8, colors="gray")
+
     plt.tight_layout()
     plt.savefig(output_path, dpi=200)
     plt.close()

@@ -605,14 +605,20 @@ def main() -> None:
                 from PIL import Image
                 parts = best_slice_name.replace(".png", "").split("_")
                 axis_str = parts[1]
-                idx = int(parts[2])
-                
+                count = int(parts[2])   # ordinal position in the linspace sequence
+
+                # Reconstruct the true voxel index the same way evaluate_slices() does
+                n_vol = builder.n3D
+                slices_per_axis = max(1, args.n_slices // 3)
+                indices = np.linspace(0, n_vol - 1, slices_per_axis, dtype=int)
+                real_idx = int(indices[count])
+
                 if axis_str == 'x':
-                    sl_color = best_array3d_color[idx, :, :]
+                    sl_color = best_array3d_color[real_idx, :, :]
                 elif axis_str == 'y':
-                    sl_color = best_array3d_color[:, idx, :]
+                    sl_color = best_array3d_color[:, real_idx, :]
                 else:
-                    sl_color = best_array3d_color[:, :, idx]
+                    sl_color = best_array3d_color[:, :, real_idx]
                     
                 im_color = Image.fromarray(sl_color.astype(np.uint8))
                 w, h = im_color.size
