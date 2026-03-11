@@ -10,6 +10,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import concurrent.futures
 
 from core.geometry import MicrostructureBuilder
 from core.solver import ThermalSolver
@@ -37,9 +38,73 @@ def maxwell_eucken(phi, k_m: float = 1.0, k_p: float = 0.001):
     return k_m * (1.0 + 2.0 * beta * phi) / (1.0 - beta * phi)
 
 
+def worker(task_args):
+    r_sphere, phi_target, output_dir, no_solver = task_args
+    pm = ProjectManager()
+    builder = MicrostructureBuilder(L=L_DIM, n3D=N_VOX, seed=42)
+    solver = ThermalSolver(n_cpus=2) # Keep per-simulation CPU to 2
+
+    import merope
+    # 1. Generate structure: homogeneous matrix + distributed spherical pores
+    multi = builder.generate_spheres([[r_sphere, phi_target]], phase_id=2)
+    struct = merope.Structure_3D(multi)
+
+    # Geometric/resolution parameters for this case
+    L_RVE = float(builder.L[0])  # cubic RVE
+    n_vox = float(builder.n3D)
+    L_voxel = L_RVE / n_vox
+    ratio_LR = L_RVE / float(r_sphere)          # representativity: L_RVE / R_pore
+    ratio_Rlvox = float(r_sphere) / L_voxel     # resolution: R_pore / L_voxel
+
+    # 2. Setup case folder and change directory
+    sub_dir = output_dir / f"R_{r_sphere}" / f"Phi_{phi_target}"
+    sub_dir.mkdir(parents=True, exist_ok=True)
+
+    with pm.cd(str(sub_dir)):
+        try:
+            # 3. Voxelization
+            fractions = builder.voxellate(struct, K_THERMAL)
+
+            # 4. AMITEX Solver
+            if no_solver:
+                res = {"Kmean": 0.0}
+            else:
+                res = solver.solve()
+
+            # 5. Data collection
+            phi_real = fractions.get(2, 0.0)
+            k_eff = res["Kmean"]
+            k_theory = maxwell_eucken(phi_real, K_MAT, K_PORE)
+            error_perc = abs(k_eff - k_theory) / k_theory * 100.0 if k_theory > 0 else 0.0
+
+            warning = ""
+            if ratio_Rlvox < 5.0:
+                warning = f" [WARN: R/l_vox={ratio_Rlvox:.1f}<5]"
+
+            print(
+                f" [DONE] R={r_sphere} | Target_Phi={phi_target:.4f} | Real_Phi={phi_real:.4f} | "
+                f"K_Sim={k_eff:.4f} | K_Max={k_theory:.4f} | Err={error_perc:.2f}%{warning}"
+            )
+
+            return {
+                "Phi_Requested": phi_target,
+                "Phi_Real": phi_real,
+                "K_Simulation": k_eff,
+                "K_Maxwell": k_theory,
+                "Ratio_LR": ratio_LR,
+                "Ratio_Rlvox": ratio_Rlvox,
+                "R_pore": float(r_sphere),
+            }
+
+        except Exception as e:
+            print(f"Error during case R={r_sphere} Phi={phi_target}: {e}")
+            return None
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run distributed porosity simulations or plot existing results.")
     parser.add_argument("--plot-only", action="store_true", help="Plot validation results without running simulations.")
+    parser.add_argument("--no-solver", action="store_true", help="Skip Amitex solver (generate geometry only).")
     args = parser.parse_args()
 
     output_dir = Path("Results_Distributed_Validation")
@@ -56,95 +121,25 @@ def main() -> None:
     # --- SIMULATION MODE (standard) ---
     else:
         pm = ProjectManager()
-        builder = MicrostructureBuilder(L=L_DIM, n3D=N_VOX, seed=42)
-        solver = ThermalSolver(n_cpus=4)
-
         pm.cleanup_folder(str(output_dir))
+        output_dir.mkdir(parents=True, exist_ok=True)
 
-        results_list = []
+        print("=== VALIDATION OF DISTRIBUTED POROSITY (SPHERES ONLY, PARALLEL) ===")
+        tasks = [(r, p, output_dir, args.no_solver) for r in SPHERE_R_VALUES for p in PHI_VALUES]
 
-        print("=== VALIDATION OF DISTRIBUTED POROSITY (SPHERES ONLY) ===")
+        # ProcessPoolExecutor scales well across heavy independent solvers
+        with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
+            raw_results = list(executor.map(worker, tasks))
 
-        for r_sphere in SPHERE_R_VALUES:
-            print(f"\n# === Simulating Sphere Radius: {r_sphere} ===")
-
-            for phi_target in PHI_VALUES:
-                print(f"\n--- Simulating Sphere Porosity: {phi_target * 100:.1f}% (R={r_sphere}) ---")
-
-                # 1. Generate structure: homogeneous matrix + distributed spherical pores
-                multi = builder.generate_spheres([[r_sphere, phi_target]], phase_id=2)
-                # Phase 0 = matrix, phase 2 = pores; consistent with K_THERMAL
-                import merope
-
-                struct = merope.Structure_3D(multi)
-
-                # Geometric/resolution parameters for this case
-                L_RVE = float(builder.L[0])  # cubic RVE
-                n_vox = float(builder.n3D)
-                L_voxel = L_RVE / n_vox
-                ratio_LR = L_RVE / float(r_sphere)          # representativity: L_RVE / R_pore
-                ratio_Rlvox = float(r_sphere) / L_voxel     # resolution: R_pore / L_voxel
-
-                # 2. Setup case folder and change directory with ProjectManager
-                # Structure: Results/R_0.5/Phi_0.10
-                sub_dir = output_dir / f"R_{r_sphere}" / f"Phi_{phi_target}"
-                with pm.cd(str(sub_dir)):
-                    try:
-                        # 3. Voxelization (writes structure.vtk + Coeffs.txt in the case folder)
-                        fractions = builder.voxellate(struct, K_THERMAL)
-
-                        # 4. AMITEX Solver (uses structure.vtk in the CWD)
-                        res = solver.solve()
-
-                        # 5. Data collection
-                        phi_real = fractions.get(2, 0.0)
-                        k_eff = res["Kmean"]
-                        k_theory = maxwell_eucken(phi_real, K_MAT, K_PORE)
-                        error_perc = abs(k_eff - k_theory) / k_theory * 100.0
-
-                        # Quality control on pore resolution
-                        if ratio_Rlvox < 5.0:
-                            print(
-                                f"   [WARNING] R_pore/L_voxel = {ratio_Rlvox:.2f} < 5. "
-                                "Pore shape is under-resolved."
-                            )
-
-                        # Compact final print for each iteration
-                        print(
-                            "   Target: {t:.4f} | Real: {pr:.4f} | "
-                            "K_Sim: {ks:.4f} | K_Max: {km:.4f} | R/l_vox: {rlv:.2f}".format(
-                                t=phi_target,
-                                pr=phi_real,
-                                ks=k_eff,
-                                km=k_theory,
-                                rlv=ratio_Rlvox,
-                            )
-                        )
-                        print(f"   -> Error vs Analytical model (Maxwell): {error_perc:.2f}%")
-
-                        results_list.append(
-                            {
-                                "Phi_Requested": phi_target,
-                                "Phi_Real": phi_real,
-                                "K_Simulation": k_eff,
-                                "K_Maxwell": k_theory,
-                                "Ratio_LR": ratio_LR,
-                                "Ratio_Rlvox": ratio_Rlvox,
-                                "R_pore": float(r_sphere),
-                            }
-                        )
-
-                    except Exception as e:
-                        print(f"Error during case Phi={phi_target}: {e}")
+        results_list = [r for r in raw_results if r is not None]
 
         # --- SAVE RESULTS ---
         if not results_list:
             print("No results.")
             return
 
-        output_dir.mkdir(parents=True, exist_ok=True)
-
         df = pd.DataFrame(results_list)
+        df = df.sort_values(by=["R_pore", "Phi_Requested"]).reset_index(drop=True)
         df.to_csv(csv_path, index=False)
         print(f"\nResults table saved to: {csv_path}")
     
