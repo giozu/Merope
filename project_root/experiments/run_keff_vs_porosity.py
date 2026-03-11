@@ -31,6 +31,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import concurrent.futures
 
 # ── Core imports (only needed when running simulations) ──────────────────────
 try:
@@ -176,77 +177,57 @@ def recover_results(output_dir: Path) -> pd.DataFrame:
     return df
 
 
-def run_simulations(output_dir: Path, no_solver: bool = False) -> pd.DataFrame:
-    """Run Mérope + Amitex for each porosity target and return a DataFrame."""
-    if not _MEROPE_AVAILABLE:
-        raise RuntimeError(
-            f"Mérope/core modules not found: {_IMPORT_ERROR_MSG}\n"
-            f"  sys.path = {sys.path}\n"
-            "Activate your Merope environment and re-run "
-            "(or check that PYTHONPATH includes project_root/)."
-        )
-
-    pm      = ProjectManager()
-    solver  = ThermalSolver(n_cpus=4)
-
-    pm.cleanup_folder(str(output_dir))
-
-    rows: list[dict] = []
-    print("=== K_eff vs Porosity – Spherical Inclusions ===")
+def worker(task_args):
+    phi_target, output_dir, no_solver = task_args
+    pm = ProjectManager()
+    solver = ThermalSolver(n_cpus=2) # 2 cores per simulation
     
-    # ── Numerical Resolution Checks ──────────────────────────────────────────
-    L_RVE   = float(L_DIM[0])  # Assuming cubic RVE
-    
-    print(f"    Geometry: R_pore = {SPHERE_R} | L_RVE = {L_RVE}")
-    print(f"    Base Resolution: N_vox = {N_VOX_BASE} (Adaptive up to {MAX_N_VOX})")
+    L_RVE = float(L_DIM[0])
+    current_n_vox = N_VOX_BASE
 
-    for phi_target in PHI_VALUES:
-        print(f"\n→ φ_target = {phi_target:.3f}")
+    while True:
+        builder = MicrostructureBuilder(L=L_DIM, n3D=current_n_vox, seed=SEED)
         
-        current_n_vox = N_VOX_BASE
+        import merope
+        multi = builder.generate_spheres([[SPHERE_R, float(phi_target)]], phase_id=2)
+        struct = merope.Structure_3D(multi)
+        
+        L_voxel = L_RVE / float(current_n_vox)
+        ratio_LR = L_RVE / float(SPHERE_R)
+        ratio_Rlvox = float(SPHERE_R) / L_voxel
 
-        while True:
-            # Re-initialize builder with current_n_vox (might have increased)
-            builder = MicrostructureBuilder(L=L_DIM, n3D=current_n_vox, seed=SEED)
-            multi   = builder.generate_spheres([[SPHERE_R, float(phi_target)]], phase_id=2)
-            struct  = merope.Structure_3D(multi)
-            
-            # Recalculate resolution parameters for logging
-            L_voxel = L_RVE / float(current_n_vox)
-            ratio_LR    = L_RVE / float(SPHERE_R)
-            ratio_Rlvox = float(SPHERE_R) / L_voxel
-
-            case_dir = output_dir / f"Phi_{phi_target:.4f}_Nvox_{current_n_vox}"
-            with pm.cd(str(case_dir)):
+        case_dir = output_dir / f"Phi_{phi_target:.4f}_Nvox_{current_n_vox}"
+        case_dir.mkdir(parents=True, exist_ok=True)
+        
+        with pm.cd(str(case_dir)):
+            try:
                 fractions = builder.voxellate(struct, K_THERMAL)
-                phi_real  = fractions.get(2, 0.0)
+                phi_real = fractions.get(2, 0.0)
 
                 if no_solver:
-                    res = {"Kxx": 0.0, "Kyy": 0.0, "Kzz": 0.0, "Kmean": 0.0}
+                    res = {"Kmean": 0.0}
                 else:
                     res = solver.solve()
 
-                k_eff    = res["Kmean"]
-                k_maxw   = float(maxwell_eucken(np.array([phi_real]), K_MAT, K_PORE)[0])
-                k_loeb   = float(loeb(np.array([phi_real]), K_MAT)[0])
+                k_eff = res["Kmean"]
+                k_maxw = float(maxwell_eucken(np.array([phi_real]), K_MAT, K_PORE)[0])
+                k_loeb = float(loeb(np.array([phi_real]), K_MAT)[0])
                 
                 error_perc = abs(k_eff - k_loeb) / k_loeb * 100.0 if k_loeb > 0 else 0.0
                 
                 print(
-                    f"   [N={current_n_vox}] φ_real={phi_real:.4f} | R/l_vox={ratio_Rlvox:.2f} | L/R={ratio_LR:.2f} | "
+                    f"   [DONE N={current_n_vox}] φ_target={phi_target:.3f} | φ_real={phi_real:.4f} | R/l_vox={ratio_Rlvox:.2f} | "
                     f"K_sim={k_eff:.4f} | Err={error_perc:.2f}%"
                 )
                 
-                # Check if we should retry with higher resolution
                 if ADAPTIVE_VOX and error_perc > MAX_ERROR_PERC and current_n_vox < MAX_N_VOX:
                     current_n_vox += N_VOX_STEP
                     if current_n_vox > MAX_N_VOX:
                         current_n_vox = MAX_N_VOX
-                    print(f"   [!] Error {error_perc:.2f}% > {MAX_ERROR_PERC}%. Retrying with N_VOX = {current_n_vox}...")
+                    print(f"   [!] Phi={phi_target:.3f}: Error {error_perc:.2f}% > {MAX_ERROR_PERC}%. Retrying with N_VOX = {current_n_vox}...")
                     continue
                 
-                # Save results
-                rows.append({
+                return {
                     "Phi_Target":  phi_target,
                     "Phi_Real":    phi_real,
                     "K_mean":      k_eff,
@@ -256,14 +237,39 @@ def run_simulations(output_dir: Path, no_solver: bool = False) -> pd.DataFrame:
                     "Ratio_LR":    ratio_LR,
                     "Ratio_Rlvox": ratio_Rlvox,
                     "N_Vox":       current_n_vox
-                })
-                
-                # If error is fine or we hit max N_VOX, we break out of the while loop
-                break
+                }
+            except Exception as e:
+                print(f"Error during Phi={phi_target} N_Vox={current_n_vox}: {e}")
+                return None
 
-    df = pd.DataFrame(rows)
-    csv_path = output_dir / "keff_vs_porosity.csv"
+
+def run_simulations(output_dir: Path, no_solver: bool = False) -> pd.DataFrame:
+    """Run Mérope + Amitex for each porosity target and return a DataFrame in parallel."""
+    if not _MEROPE_AVAILABLE:
+        raise RuntimeError(
+            f"Mérope/core modules not found: {_IMPORT_ERROR_MSG}\n"
+            "Activate your Merope environment and re-run."
+        )
+
+    pm = ProjectManager()
+    pm.cleanup_folder(str(output_dir))
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    print("=== K_eff vs Porosity – Spherical Inclusions (PARALLEL) ===")
+    L_RVE = float(L_DIM[0])
+    print(f"    Geometry: R_pore = {SPHERE_R} | L_RVE = {L_RVE}")
+    print(f"    Base Resolution: N_vox = {N_VOX_BASE} (Adaptive up to {MAX_N_VOX})")
+
+    tasks = [(p, output_dir, no_solver) for p in PHI_VALUES]
+    
+    with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
+        raw_results = list(executor.map(worker, tasks))
+
+    rows = [r for r in raw_results if r is not None]
+    
+    df = pd.DataFrame(rows)
+    df = df.sort_values(by=["Phi_Target", "N_Vox"]).reset_index(drop=True)
+    csv_path = output_dir / "keff_vs_porosity.csv"
     df.to_csv(csv_path, index=False)
     print(f"\nResults saved → {csv_path}")
     return df
