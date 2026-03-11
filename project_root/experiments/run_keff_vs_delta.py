@@ -38,47 +38,51 @@ OUTPUT_DIR = Path("Results_Keff_vs_Delta")
 
 def worker(task_args):
     p, delta, no_solver = task_args
-    pm = ProjectManager()
     builder = MicrostructureBuilder(L=L_DIM, n3D=N_VOX, seed=42)
     solver = ThermalSolver(n_cpus=2) # Keep per-simulation CPU to 2 to avoid memory blow-up with max_workers=4
-    
-    case_dir = OUTPUT_DIR / f"P_{p:.2f}_Delta_{delta:.3f}"
+
+    case_dir = OUTPUT_DIR.resolve() / f"P_{p:.2f}_Delta_{delta:.3f}"
     case_dir.mkdir(parents=True, exist_ok=True)
-    
-    with pm.cd(str(case_dir)):
-        struct = builder.generate_interconnected_structure(
-            inter_radius=0.5, inter_phi=0.0,
-            intra_radius=0.5, intra_phi=p,
-            grain_radius=3.0, grain_phi=1.0,
-            delta=delta
-        )
-        
-        fractions = builder.voxellate(struct, K_THERMAL)
-        p_real = fractions.get(2, 0.0)
-        
-        if no_solver:
-            res = {"Kmean": 0.0}
-        else:
-            res = solver.solve()
-            
-        k_eff = res["Kmean"]
-        print(f" [DONE] P={p} | delta={delta:.3f} | Real Porosity={p_real:.4f} -> K_eff={k_eff:.4f}")
-        
-        return {
-            "Target_P": p,
-            "Delta": delta,
-            "Real_P": p_real,
-            "K_eff": k_eff
-        }
+
+    vtk_path    = case_dir / "structure.vtk"
+    coeffs_path = case_dir / "Coeffs.txt"
+    results_file = case_dir / "thermalCoeff_amitex.txt"
+
+    struct = builder.generate_interconnected_structure(
+        inter_radius=0.5, inter_phi=0.0,
+        intra_radius=0.5, intra_phi=p,
+        grain_radius=3.0, grain_phi=1.0,
+        delta=delta
+    )
+
+    fractions = builder.voxellate(struct, K_THERMAL,
+                                  vtk_path=vtk_path,
+                                  coeffs_path=coeffs_path)
+    p_real = fractions.get(2, 0.0)
+
+    if no_solver:
+        res = {"Kmean": 0.0}
+    else:
+        res = solver.solve(vtk_file=vtk_path, results_file=results_file)
+
+    k_eff = res["Kmean"]
+    print(f" [DONE] P={p} | delta={delta:.3f} | Real Porosity={p_real:.4f} -> K_eff={k_eff:.4f}")
+
+    return {
+        "Target_P": p,
+        "Delta": delta,
+        "Real_P": p_real,
+        "K_eff": k_eff
+    }
 
 def run_sweeps(no_solver=False):
     pm = ProjectManager()
     pm.cleanup_folder(str(OUTPUT_DIR))
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    
+
     tasks = [(p, delta, no_solver) for p in P_TARGETS for delta in DELTA_VALUES]
     print(f"=== K_eff vs Delta Sweep (Parallel, {len(tasks)} tasks, max_workers=4) ===")
-    
+
     # ProcessPoolExecutor scales extremely well across heavy independent solvers like Amitex
     with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
         rows = list(executor.map(worker, tasks))
@@ -90,21 +94,21 @@ def run_sweeps(no_solver=False):
 
 def plot_slide(df, output_dir):
     fig, ax = plt.subplots(figsize=(8, 6))
-    
+
     colors = {0.1: "steelblue", 0.2: "darkorange", 0.3: "forestgreen"}
-    
+
     for p, group in df.groupby("Target_P"):
-        ax.plot(group["Delta"], group["K_eff"], 'o', markersize=5, 
+        ax.plot(group["Delta"], group["K_eff"], 'o', markersize=5,
                 color=colors.get(p, "black"), label=f"p = {p}")
 
     ax.set_xlabel(r"$\delta$ (Thickness of porous region at GB)", fontsize=12)
     ax.set_ylabel(r"$K_\mathrm{eff}$ [W/m·K]", fontsize=12)
-    ax.set_title("Effect of $\delta$ on Connectivity (Crack to Sphere Transition)", fontsize=14)
+    ax.set_title(r"Effect of $\delta$ on Connectivity (Crack to Sphere Transition)", fontsize=14)
     ax.grid(True, linestyle="--", alpha=0.5)
     ax.legend()
     ax.set_xlim(0, 1.2)
     ax.set_ylim(-0.05, 1.0)
-    
+
     img_path = output_dir / "Slide_Keff_vs_Delta.png"
     fig.savefig(img_path, dpi=300)
     print(f"\nSaved plot to {img_path}")
