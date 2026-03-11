@@ -446,14 +446,17 @@ def main() -> None:
         "grid_size":        20,
         "seed":             args.seed,
         "work_dir":         work_dir,
-        "w_data":           0.3,    # weight for image similarity score
-        "w_por":            0.7,    # weight for porosity fitness
+        "w_data":           0.2,    # weight for image similarity score (matches thesis)
+        "w_por":            0.8,    # weight for porosity fitness (matches thesis)
     }
+
+    x0_guesses: List[List[float]] = []
 
     if mode == "distributed":
         fixed["num_radii"]    = 6      # log-normal sample count per evaluation
         fixed["small_radius"] = 0.05   # nano-pore radius (physical units, fixed)
         space = _make_space_distributed()
+        x0_guesses = [[np.log(0.5), 0.20, 0.50]] # [mean_radius, std_radius, small_frac] based on thesis and recent tests
 
         @use_named_args(space)
         def objective(**params):
@@ -472,6 +475,7 @@ def main() -> None:
             "grain_phi":    1.0,
         })
         space = _make_space_interconnected()
+        x0_guesses = [[0.08, 0.15, 0.35]] # starting point based on best known thesis configurations
 
         @use_named_args(space)
         def objective(**params):
@@ -496,7 +500,8 @@ def main() -> None:
         objective,
         space,
         n_calls=args.n_calls,
-        n_initial_points=min(max(3, args.n_calls // 4), args.n_calls - 1),
+        x0=x0_guesses,
+        n_initial_points=min(max(2, args.n_calls // 5), args.n_calls - 1),
         random_state=args.seed,
         verbose=False,
     )
