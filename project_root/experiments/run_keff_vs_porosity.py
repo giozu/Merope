@@ -47,14 +47,14 @@ except ImportError as _import_err:
 # =============================================================================
 # CONFIGURATION – edit here
 # =============================================================================
-L_DIM   = [10.0, 10.0, 10.0]   # RVE size [μm] (cubic)
+L_DIM   = [15.0, 15.0, 15.0]    # RVE size [μm] (cubic). Increased to 15 to ensure L_RVE/R_pore > 20
 N_VOX_BASE = 120                # Starting voxels per side
 SEED    = 42
 
 # Adaptive Resolution Settings
 ADAPTIVE_VOX   = True
-MAX_ERROR_PERC = 2.0            # If error > this %, increase N_VOX
-MAX_N_VOX      = 240            # Maximum allowed N_VOX
+MAX_ERROR_PERC = 1.0            # Strict 1% error tolerance
+MAX_N_VOX      = 270            # Maximum allowed N_VOX
 N_VOX_STEP     = 30             # How much to increase N_VOX each time
 
 # Sphere radius / porosity sweep
@@ -76,24 +76,18 @@ OUTPUT_DIR = Path("Results_Keff_vs_Porosity")
 # =============================================================================
 
 def maxwell_eucken(phi: np.ndarray, k_m: float = K_MAT, k_p: float = K_PORE) -> np.ndarray:
-    """Maxwell–Eucken model for dilute spherical inclusions.
+    """Maxwell model for dilute non-interacting spherical inclusions."""
+    return k_m * (
+        ((k_p + 2*k_m) - 2*phi*(k_m - k_p)) /
+        ((k_p + 2*k_m) +   phi*(k_m - k_p))
+    )
 
-    K_eff = K_m * (1 + 2β·φ) / (1 − β·φ)       with  β = (K_p − K_m)/(K_p + 2·K_m)
+
+def loeb(phi: np.ndarray, k_m: float = K_MAT, alpha: float = 1.37) -> np.ndarray:
+    """Loeb model for porous materials.
     """
-    beta = (k_p - k_m) / (k_p + 2.0 * k_m)
-    return k_m * (1.0 + 2.0 * beta * phi) / (1.0 - beta * phi)
-
-
-def loeb(phi: np.ndarray, k_m: float = K_MAT) -> np.ndarray:
-    """Loeb (1954) model for spherical pores.
-
-    K_eff = K_m · (1 − φ)^(4/3)
-
-    Reference: Loeb, A.L. (1954). "Thermal conductivity: VIII, A theory of
-    thermal conductivity of porous materials." Journal of the American
-    Ceramic Society, 37(2), 96-99.
-    """
-    return k_m * (1.0 - phi) ** (4.0 / 3.0)
+    # Force negative values to 0 if alpha * phi > 1.0
+    return np.maximum(0.0, k_m * (1.0 - alpha * phi))
 
 
 # =============================================================================
@@ -150,10 +144,10 @@ def recover_results(output_dir: Path) -> pd.DataFrame:
         
         k_maxw   = float(maxwell_eucken(np.array([phi_real]), K_MAT, K_PORE)[0])
         k_loeb   = float(loeb(np.array([phi_real]), K_MAT)[0])
-        error_perc = abs(k_eff - k_maxw) / k_maxw * 100.0 if k_maxw > 0 else 0.0
+        error_perc = abs(k_eff - k_loeb) / k_loeb * 100.0 if k_loeb > 0 else 0.0
         
         print(
-            f"   [Recovered N={current_n_vox}] φ_real={phi_real:.4f} | "
+            f"   [Recovered N={current_n_vox}] φ_real={phi_real:.4f} | R/l_vox={ratio_Rlvox:.2f} | L/R={ratio_LR:.2f} | "
             f"K_sim={k_eff:.4f} | Err={error_perc:.2f}%"
         )
         
@@ -236,10 +230,10 @@ def run_simulations(output_dir: Path, no_solver: bool = False) -> pd.DataFrame:
                 k_maxw   = float(maxwell_eucken(np.array([phi_real]), K_MAT, K_PORE)[0])
                 k_loeb   = float(loeb(np.array([phi_real]), K_MAT)[0])
                 
-                error_perc = abs(k_eff - k_maxw) / k_maxw * 100.0 if k_maxw > 0 else 0.0
+                error_perc = abs(k_eff - k_loeb) / k_loeb * 100.0 if k_loeb > 0 else 0.0
                 
                 print(
-                    f"   [N={current_n_vox}] φ_real={phi_real:.4f} | R/l_vox={ratio_Rlvox:.2f} | "
+                    f"   [N={current_n_vox}] φ_real={phi_real:.4f} | R/l_vox={ratio_Rlvox:.2f} | L/R={ratio_LR:.2f} | "
                     f"K_sim={k_eff:.4f} | Err={error_perc:.2f}%"
                 )
                 
@@ -282,6 +276,10 @@ def run_simulations(output_dir: Path, no_solver: bool = False) -> pd.DataFrame:
 def plot_results(df: pd.DataFrame, output_dir: Path) -> None:
     """Enhanced plots including error analysis and resolution checks."""
 
+    # Filter out duplicate Phi_Target by keeping only the one with maximum N_Vox
+    if "N_Vox" in df.columns:
+        df = df.loc[df.groupby("Phi_Target")["N_Vox"].idxmax()].reset_index(drop=True)
+
     phi   = df["Phi_Real"].to_numpy()
     phi_s = np.linspace(0.0, phi.max() * 1.05, 200)
 
@@ -299,9 +297,9 @@ def plot_results(df: pd.DataFrame, output_dir: Path) -> None:
     ax1.grid(True, linestyle="--", alpha=0.3)
     ax1.set_ylim(bottom=0.0, top=1.05)
 
-    # 2. Error Plot: Relative Error vs Porosity
+    # 2. Error Plot: Relative Error vs Loeb
     # Color points differently if N_VOX was increased (Adaptive)
-    adaptive_mask = df["N_Vox"] > df["N_Vox"].min()
+    adaptive_mask = df["N_Vox"] > N_VOX_BASE
     base_mask = ~adaptive_mask
     
     # Draw line through all points
@@ -313,11 +311,16 @@ def plot_results(df: pd.DataFrame, output_dir: Path) -> None:
     
     # Plot adaptive points
     if adaptive_mask.any():
-        ax2.plot(df["Phi_Real"][adaptive_mask], df["Error_Perc"][adaptive_mask], "s", 
-                 color="orange", linewidth=1.0, markersize=5, zorder=3, label="Adaptive N_Vox (Increased)")
-        ax2.legend(fontsize=9, loc="upper left")
+        adaptive_df = df[adaptive_mask]
+        colors = ["orange", "darkorange", "chocolate", "saddlebrown", "coral"]
+        for i, nvox_val in enumerate(sorted(adaptive_df["N_Vox"].unique())):
+            c = colors[i % len(colors)]
+            nvox_mask = df["N_Vox"] == nvox_val
+            ax2.plot(df["Phi_Real"][nvox_mask], df["Error_Perc"][nvox_mask], "s", 
+                     color=c, linewidth=1.0, markersize=5, zorder=3, label=f"N_Vox = {nvox_val}")
 
-    ax2.set_ylabel("Rel. Error vs Maxwell [%]", fontsize=12)
+    ax2.legend(fontsize=9, loc="upper left")
+    ax2.set_ylabel("Rel. Error vs Loeb [%]", fontsize=12)
     ax2.set_xlabel("Porosity", fontsize=12)
     ax2.grid(True, linestyle="--", alpha=0.3)
     ax2.set_ylim(bottom=0.0)
@@ -326,12 +329,13 @@ def plot_results(df: pd.DataFrame, output_dir: Path) -> None:
     max_nvox_used = df["N_Vox"].max()
     res_text = (
         f"Resolution Info:\n"
-        f"Base N_vox = {df['N_Vox'].min()}\n"
-        f"Max used N_vox = {max_nvox_used}\n"
-        f"Base R_pore/L_vox = {df['Ratio_Rlvox'].iloc[0]:.2f}\n"
+        f"Base N_vox = {N_VOX_BASE}\n"
+        f"Max used = {max_nvox_used}\n"
+        f"R_pore/L_vox = {df['Ratio_Rlvox'].iloc[0]:.2f}\n"
         f"L_RVE / R_pore = {df['Ratio_LR'].iloc[0]:.2f}"
     )
-    plt.text(0.05, 0.95, res_text, transform=ax2.transAxes, verticalalignment='top',
+    # Place text at the bottom right where there is empty space
+    plt.text(0.95, 0.05, res_text, transform=ax2.transAxes, verticalalignment='bottom', horizontalalignment='right',
              bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
 
     fig.tight_layout()
@@ -367,6 +371,19 @@ def main() -> None:
             raise FileNotFoundError(f"CSV not found: {csv_path}. Run without --plot-only first.")
         print(f"Loading existing results from {csv_path}")
         df = pd.read_csv(csv_path)
+        
+        # Recalculate analytical models and precision metrics on the fly 
+        # (in case equations or config like L_DIM were updated after the simulation)
+        L_RVE = float(L_DIM[0])
+        if "Phi_Real" in df.columns and "K_mean" in df.columns:
+            df["K_Maxwell"] = maxwell_eucken(df["Phi_Real"].values, K_MAT, K_PORE)
+            df["K_Loeb"]    = loeb(df["Phi_Real"].values, K_MAT)
+            df["Error_Perc"]= np.where(df["K_Loeb"] > 0, 
+                                       np.abs(df["K_mean"] - df["K_Loeb"]) / df["K_Loeb"] * 100.0, 
+                                       0.0)
+            if "N_Vox" in df.columns:
+                df["Ratio_LR"] = L_RVE / float(SPHERE_R)
+                df["Ratio_Rlvox"] = float(SPHERE_R) / (L_RVE / df["N_Vox"])
     else:
         df = run_simulations(OUTPUT_DIR, no_solver=args.no_solver)
 
