@@ -65,21 +65,25 @@ def main():
         )
         
         # 2. Voxelizzazione
-        # Salviamo in una sottocartella per ordine
-        sub_dir = f"{output_dir}/Phi_{phi_target}"
-        os.makedirs(sub_dir, exist_ok=True)
-        
-        # Ci spostiamo lì per salvare i file VTK e temp di Amitex
-        original_cwd = os.getcwd()
-        os.chdir(sub_dir)
+        # 2. Voxelization
+        # Setup case folder (absolute path)
+        case_dir = Path(output_dir).resolve() / f"Phi_{phi_target}"
+        case_dir.mkdir(parents=True, exist_ok=True)
+        abs_case_dir = str(case_dir)
         
         try:
-            fractions = builder.voxellate(struct, K_THERMAL)
+            # 3. Voxelization (passing absolute paths for outputs)
+            fractions = builder.voxellate(
+                struct, 
+                K_THERMAL, 
+                vtk_path=case_dir / "structure.vtk",
+                coeffs_path=case_dir / "Coeffs.txt"
+            )
             
-            # 3. Solver AMITEX
-            res = solver.solve()
+            # 4. Solver AMITEX (handles chdir internally)
+            res = solver.solve(vtk_path=os.path.join(abs_case_dir, "structure.vtk"))
             
-            # 4. Raccogli Dati
+            # 5. Raccogli Dati
             phi_real_tot = fractions.get(2, 0.0) # Porosità totale (Sfere + Bordi)
             k_eff = res['Kmean']
             
@@ -94,8 +98,6 @@ def main():
             
         except Exception as e:
             print(f"Errore durante la simulazione: {e}")
-        finally:
-            os.chdir(original_cwd)
 
     # --- SALVATAGGIO E PLOT ---
     df = pd.DataFrame(results_list)

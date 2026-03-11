@@ -210,9 +210,13 @@ def _build_and_score_distributed(
         )
 
         # Also write VTK for Amitex (in work_dir)
-        with pm.cd(fixed["work_dir"]):
-            printer = merope.vox.vtk_printer_3D()
-            printer.printVTK_segmented(grid, "structure.vtk", "Coeffs.txt", nameValue="MaterialId")
+        printer = merope.vox.vtk_printer_3D()
+        printer.printVTK_segmented(
+            grid, 
+            os.path.join(fixed["work_dir"], "structure.vtk"), 
+            os.path.join(fixed["work_dir"], "Coeffs.txt"), 
+            nameValue="MaterialId"
+        )
 
         slices_dir = os.path.join(fixed["work_dir"], "tmp_slices")
         eval_res = evaluate_slices(

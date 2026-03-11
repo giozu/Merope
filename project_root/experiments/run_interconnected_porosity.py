@@ -1,6 +1,6 @@
-from __future__ import annotations
-
+import os
 import sys
+import argparse
 from pathlib import Path
 from typing import Dict
 
@@ -12,11 +12,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 from core.geometry import MicrostructureBuilder
 from core.solver import ThermalSolver
 from core.utils import ProjectManager
-
-
-# ----------------------------------------------------------------------
-# CONFIGURAZIONE FISICA E NUMERICA
-# ----------------------------------------------------------------------
+import numpy as np
 
 # RVE e voxelizzazione (coerente con inco_intra_inter_polycrystal.py)
 L_DIM = [10.0, 10.0, 10.0]
@@ -43,29 +39,33 @@ K_THERMAL = [K_MATRIX, K_MATRIX, K_GAS]
 
 def main() -> None:
     """Esegue un piccolo sweep di casi inter+intra usando l'API OOP."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--no-solver", action="store_true", help="Skip Amitex solver")
+    args = parser.parse_args()
+
     pm = ProjectManager()
     builder = MicrostructureBuilder(L=L_DIM, n3D=N_VOX, seed=SEED)
     solver = ThermalSolver(n_cpus=4)
 
-    base_folder = "Results_Interconnected"
-    pm.cleanup_folder(base_folder)
+    output_dir = Path("Results_Interconnected")
+    pm.cleanup_folder(str(output_dir))
 
     for inter_phi in INTER_PHI_LIST:
         for intra_phi in INTRA_PHI_LIST:
             for delta in DELTA_LIST:
-                case_dir = (
-                    f"{base_folder}/"
+                case_name = (
                     f"p_inter_{inter_phi:.3f}_"
                     f"p_intra_{intra_phi:.3f}_"
                     f"delta_{delta:.4f}"
                 ).replace(".", "_")
+                
+                case_dir = output_dir.resolve() / case_name
+                case_dir.mkdir(parents=True, exist_ok=True)
+                abs_case_dir = str(case_dir)
 
-                print(
-                    f"\n=== Case: inter={inter_phi:.3f}, "
-                    f"intra={intra_phi:.3f}, delta={delta:.4f} ==="
-                )
+                print(f"\n=== Case: {case_name} ===")
 
-                with pm.cd(case_dir):
+                try:
                     # 1. Costruisci la microstruttura completa (inter+intra)
                     struct = builder.generate_interconnected_structure(
                         inter_radius=INTER_R,
@@ -77,11 +77,20 @@ def main() -> None:
                         delta=delta,
                     )
 
-                    # 2. Voxelizza (scrive structure.vtk + Coeffs.txt nella cartella del caso)
-                    fractions: Dict[int, float] = builder.voxellate(struct, K_THERMAL)
+                    # 2. Voxelizza (Apply K, passing absolute paths)
+                    fractions: Dict[int, float] = builder.voxellate(
+                        struct, 
+                        K_THERMAL, 
+                        vtk_path=case_dir / "structure.vtk",
+                        coeffs_path=case_dir / "Coeffs.txt"
+                    )
 
-                    # 3. Risolvi con Amitex (thermalCoeff_amitex.txt nella stessa cartella)
-                    results = solver.solve()
+                    # 3. Solver Amitex (handles chdir internally)
+                    if args.no_solver:
+                        print(f"Skipping solver for {case_name}")
+                        results = {"Kxx": 0, "Kyy": 0, "Kzz": 0, "Kmean": 0}
+                    else:
+                        results = solver.solve(vtk_path=os.path.join(abs_case_dir, "structure.vtk"))
 
                     # 4. Logga i risultati in un summary.txt a livello superiore
                     phi_pore = fractions.get(2, 0.0)  # porosità totale (fase 2)
@@ -92,14 +101,15 @@ def main() -> None:
                         "phi_pore_measured": phi_pore,
                         **results,
                     }
-                    pm.log_results("../summary.txt", log_data, header=list(log_data.keys()))
+                    pm.log_results(str(output_dir / "summary.txt"), log_data, header=list(log_data.keys()))
 
                     print(
                         f"   -> phi_pore = {phi_pore:.4f}, "
                         f"Kmean = {results['Kmean']:.4f}"
                     )
+                except Exception as e:
+                    print(f"Error during {case_name}: {e}")
 
 
 if __name__ == "__main__":
     main()
-

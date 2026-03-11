@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
 import argparse
+import os
 
 # Ensure project_root/ is on sys.path so `core` is importable
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -56,49 +57,56 @@ def worker(task_args):
     ratio_LR = L_RVE / float(r_sphere)          # representativity: L_RVE / R_pore
     ratio_Rlvox = float(r_sphere) / L_voxel     # resolution: R_pore / L_voxel
 
-    # 2. Setup case folder and change directory
-    sub_dir = output_dir / f"R_{r_sphere}" / f"Phi_{phi_target}"
+    # 2. Setup case folder (absolute path)
+    sub_dir = output_dir.resolve() / f"R_{r_sphere}" / f"Phi_{phi_target}"
     sub_dir.mkdir(parents=True, exist_ok=True)
+    abs_sub_dir = str(sub_dir)
 
-    with pm.cd(str(sub_dir)):
-        try:
-            # 3. Voxelization
-            fractions = builder.voxellate(struct, K_THERMAL)
+    try:
+        # 3. Voxelization (passing absolute paths for outputs)
+        fractions = builder.voxellate(
+            struct, 
+            K_THERMAL, 
+            vtk_path=os.path.join(abs_sub_dir, "structure.vtk"),
+            coeffs_path=os.path.join(abs_sub_dir, "Coeffs.txt")
+        )
 
-            # 4. AMITEX Solver
-            if no_solver:
-                res = {"Kmean": 0.0}
-            else:
-                res = solver.solve()
+        # 4. AMITEX Solver (internally handles chdir to the vtk file directory)
+        if no_solver:
+            res = {"Kmean": 0.0}
+        else:
+            # solver.solve() expects to find the .vtk in the work_dir
+            # ThermalSolver.solve handles the chdir safely
+            res = solver.solve(vtk_path=os.path.join(abs_sub_dir, "structure.vtk"))
 
-            # 5. Data collection
-            phi_real = fractions.get(2, 0.0)
-            k_eff = res["Kmean"]
-            k_theory = maxwell_eucken(phi_real, K_MAT, K_PORE)
-            error_perc = abs(k_eff - k_theory) / k_theory * 100.0 if k_theory > 0 else 0.0
+        # 5. Data collection
+        phi_real = fractions.get(2, 0.0)
+        k_eff = res["Kmean"]
+        k_theory = maxwell_eucken(phi_real, K_MAT, K_PORE)
+        error_perc = abs(k_eff - k_theory) / k_theory * 100.0 if k_theory > 0 else 0.0
 
-            warning = ""
-            if ratio_Rlvox < 5.0:
-                warning = f" [WARN: R/l_vox={ratio_Rlvox:.1f}<5]"
+        warning = ""
+        if ratio_Rlvox < 5.0:
+            warning = f" [WARN: R/l_vox={ratio_Rlvox:.1f}<5]"
 
-            print(
-                f" [DONE] R={r_sphere} | Target_Phi={phi_target:.4f} | Real_Phi={phi_real:.4f} | "
-                f"K_Sim={k_eff:.4f} | K_Max={k_theory:.4f} | Err={error_perc:.2f}%{warning}"
-            )
+        print(
+            f" [DONE] R={r_sphere} | Target_Phi={phi_target:.4f} | Real_Phi={phi_real:.4f} | "
+            f"K_Sim={k_eff:.4f} | K_Max={k_theory:.4f} | Err={error_perc:.2f}%{warning}"
+        )
 
-            return {
-                "Phi_Requested": phi_target,
-                "Phi_Real": phi_real,
-                "K_Simulation": k_eff,
-                "K_Maxwell": k_theory,
-                "Ratio_LR": ratio_LR,
-                "Ratio_Rlvox": ratio_Rlvox,
-                "R_pore": float(r_sphere),
-            }
+        return {
+            "Phi_Requested": phi_target,
+            "Phi_Real": phi_real,
+            "K_Simulation": k_eff,
+            "K_Maxwell": k_theory,
+            "Ratio_LR": ratio_LR,
+            "Ratio_Rlvox": ratio_Rlvox,
+            "R_pore": float(r_sphere),
+        }
 
-        except Exception as e:
-            print(f"Error during case R={r_sphere} Phi={phi_target}: {e}")
-            return None
+    except Exception as e:
+        print(f"Error during case R={r_sphere} Phi={phi_target}: {e}")
+        return None
 
 
 def main() -> None:
