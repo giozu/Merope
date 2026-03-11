@@ -124,9 +124,13 @@ def _build_and_score_distributed(
 ) -> float:
     """Generate a distributed-porosity structure and return the average score.
 
+    Bimodal pore distribution (mirrors MOX_structure_generator):
+      - Population 1 (nano-pores): fixed small radius, phi = target * small_frac
+      - Population 2 (large pores): log-normal, phi = target * (1 - small_frac)
+
     Parameters
     ----------
-    params  : dict with ``mean_radius`` (log) and ``std_radius``.
+    params  : dict with ``mean_radius`` (log), ``std_radius``, ``small_frac``.
     fixed   : dict with all fixed parameters.
     exp_image: path to the experimental reference image.
 
@@ -140,19 +144,28 @@ def _build_and_score_distributed(
     num_radii: int = fixed["num_radii"]
     n_slices: int = fixed["n_slices"]
     grid_size: int = fixed["grid_size"]
+    small_radius: float = fixed["small_radius"]   # fixed nano-pore radius
 
-    mean_r = float(params["mean_radius"])    # already in log-space
-    std_r  = float(params["std_radius"])
+    mean_r    = float(params["mean_radius"])    # log-space
+    std_r     = float(params["std_radius"])
+    small_frac = float(params.get("small_frac", 0.0))  # fraction of phi for nano-pores
 
-    # Sample log-normal radii
+    phi_large = target_porosity * (1.0 - small_frac)
+    phi_small = target_porosity * small_frac
+
+    # --- Population 2: log-normal large pores ---
     rng = np.random.default_rng(fixed["seed"])
     sampled = np.abs(rng.lognormal(mean_r, std_r, num_radii))
     sampled = sampled[(sampled >= 0.005) & (sampled <= 3.0)]
     if sampled.size == 0:
         return 0.0
 
-    phi_each = target_porosity / sampled.size
+    phi_each = phi_large / sampled.size
     radii_phi_list = [[float(r), float(phi_each)] for r in sampled]
+
+    # --- Population 1: small fixed-radius nano-pores ---
+    if phi_small > 1e-4:
+        radii_phi_list.append([float(small_radius), float(phi_small)])
 
     try:
         multi = builder.generate_spheres(radii_phi_list, phase_id=2)
@@ -302,7 +315,10 @@ def _build_and_score_interconnected(
 def _make_space_distributed() -> List:
     return [
         Real(np.log(0.05), np.log(2.0), name="mean_radius"),
-        Real(0.10, 0.60,                name="std_radius"),   # min 0.10: avoids trivial monodisperse solution
+        Real(0.10, 0.60,                name="std_radius"),
+        # Fraction of total porosity assigned to nano-pores (small_radius, fixed).
+        # 0 = all large log-normal pores;  1 = all nano-pores.
+        Real(0.0, 0.6,                  name="small_frac"),
     ]
 
 
@@ -435,13 +451,15 @@ def main() -> None:
     }
 
     if mode == "distributed":
-        fixed["num_radii"] = 6     # how many log-normal sample radii per evaluation
+        fixed["num_radii"]    = 6      # log-normal sample count per evaluation
+        fixed["small_radius"] = 0.05   # nano-pore radius (physical units, fixed)
         space = _make_space_distributed()
 
         @use_named_args(space)
         def objective(**params):
             print(f"\n[Call] mean_radius={params['mean_radius']:.4f}  "
-                  f"std_radius={params['std_radius']:.4f}")
+                  f"std_radius={params['std_radius']:.4f}  "
+                  f"small_frac={params['small_frac']:.3f}")
             score = _build_and_score_distributed(params, fixed, exp_image)
             return -score          # gp_minimize minimises → negate
 
@@ -525,8 +543,13 @@ def main() -> None:
                               fixed["num_radii"])
             )
             sampled = sampled[(sampled >= 0.005) & (sampled <= 3.0)]
-            phi_each = target_porosity / sampled.size
+            small_frac  = float(best_params.get("small_frac", 0.0))
+            phi_large   = target_porosity * (1.0 - small_frac)
+            phi_small   = target_porosity * small_frac
+            phi_each    = phi_large / max(sampled.size, 1)
             radii_phi_list = [[float(r), float(phi_each)] for r in sampled]
+            if phi_small > 1e-4:
+                radii_phi_list.append([float(fixed["small_radius"]), float(phi_small)])
             multi = builder.generate_spheres(radii_phi_list, phase_id=2)
             struct = merope.Structure_3D(multi)
         else:

@@ -264,29 +264,38 @@ def plot_area_distribution(
     area_threshold: int = 30,
     exp_um_per_px: float = 1.0,
     sim_um_per_px: float = 1.0,
+    sim_upscale_factor: int = 4,
 ) -> None:
     """Save a log-scale histogram comparing pore areas of two images.
 
     Parameters
     ----------
-    sim_image_path  : path to the simulated (best) slice.
-    exp_image_path  : path to the experimental reference image.
-    output_path     : where to save the PNG.
-    area_threshold  : minimum area in *experimental* pixels used for noise filtering.
-    exp_um_per_px   : physical scale of the experimental image  [µm / pixel].
-    sim_um_per_px   : physical scale of the simulated slice     [µm / pixel].
-                      Set both to convert the histogram x-axis to µm².
+    sim_image_path      : path to the simulated (best) slice.
+    exp_image_path      : path to the experimental reference image.
+    output_path         : where to save the PNG.
+    area_threshold      : minimum area in *experimental* pixels for noise filtering.
+    exp_um_per_px       : physical scale of the experimental image [µm / pixel].
+    sim_um_per_px       : physical scale of the simulated slice    [µm / pixel].
+    sim_upscale_factor  : upscaling factor used when saving the simulated slice
+                          (default 4, matching evaluate_slices). Simulated pixel
+                          areas are divided by factor² to bring them to voxel-space,
+                          making them directly comparable to experimental pixel areas.
     """
-    def _areas(path: str) -> List[float]:
+    def _areas(path: str, thr: int) -> List[float]:
         img = Image.open(path).convert("L")
-        arr = _normalize(np.array(img))       # contrast-normalize before Otsu
+        arr = _normalize(np.array(img))
         thresh = threshold_otsu(arr)
         binary = arr < thresh
         lbl = label(binary)
-        return [p.area for p in regionprops(lbl) if p.area >= area_threshold]
+        return [p.area for p in regionprops(lbl) if p.area >= thr]
 
-    areas_sim_px = np.array(_areas(sim_image_path), dtype=float)
-    areas_exp_px = np.array(_areas(exp_image_path), dtype=float)
+    # Simulated slices are saved at sim_upscale_factor× → areas are factor² too large
+    sim_thr_px = area_threshold * (sim_upscale_factor ** 2)
+    areas_sim_raw = np.array(_areas(sim_image_path, sim_thr_px), dtype=float)
+    areas_exp_px  = np.array(_areas(exp_image_path, area_threshold), dtype=float)
+
+    # Correct simulated areas back to voxel-space
+    areas_sim_px = areas_sim_raw / (sim_upscale_factor ** 2)
 
     # Convert to physical area [µm²]
     areas_sim_um2 = areas_sim_px * sim_um_per_px ** 2
@@ -296,23 +305,24 @@ def plot_area_distribution(
     use_physical = (exp_um_per_px != 1.0 or sim_um_per_px != 1.0)
     xlabel = "Pore area [µm²]" if use_physical else "Pore area [pixel²]"
 
-    # Shared bin edges in physical space
     all_vals = np.concatenate([areas_sim_um2, areas_exp_um2])
     bins = np.linspace(0, np.percentile(all_vals, 99.5), 81) if all_vals.size else 80
 
     fig, ax = plt.subplots(figsize=(9, 6))
-    ax.hist(areas_sim_um2, bins=bins, alpha=0.55, log=True, label="Simulated slice")
-    ax.hist(areas_exp_um2, bins=bins, alpha=0.55, log=True, label="Experimental")
+    ax.hist(areas_sim_um2, bins=bins, alpha=0.55, log=True, label="Simulated slice",
+            color="steelblue")
+    ax.hist(areas_exp_um2, bins=bins, alpha=0.55, log=True, label="Experimental",
+            color="darkorange")
     ax.axvline(x=thr_um2, color="red", linestyle="--",
-               linewidth=1.5, label=f"Threshold ({thr_um2:.0f} µm²)" if use_physical
-                                    else f"Threshold ({area_threshold} px²)")
+               linewidth=1.5,
+               label=f"Threshold ({thr_um2:.0f} µm²)" if use_physical
+                     else f"Threshold ({area_threshold} px²)")
     ax.set_xlabel(xlabel)
     ax.set_ylabel("Counts (log)")
     ax.set_title("Pore area distribution: simulation vs experiment")
     ax.legend()
     ax.grid(True, linestyle="--", alpha=0.4)
 
-    # Add a secondary x-axis showing pixel² if we are in physical mode
     if use_physical:
         ax2 = ax.twiny()
         ax2.set_xlim(np.array(ax.get_xlim()) / exp_um_per_px ** 2)
@@ -322,3 +332,4 @@ def plot_area_distribution(
     plt.tight_layout()
     plt.savefig(output_path, dpi=200)
     plt.close()
+

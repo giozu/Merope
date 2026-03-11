@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Dict, Union
 
@@ -52,24 +53,33 @@ class ThermalSolver:
             ``\"Kmean\"`` (mean of the diagonal). If anything goes wrong
             (missing files, parse errors, etc.), all values are set to zero.
         """
-        vtk_path = Path(vtk_file)
+        vtk_path = Path(vtk_file).resolve()
         res_path = Path(results_file)
 
         if not vtk_path.is_file():
             print(f"ERROR: VTK file not found, skipping Amitex run: {vtk_path}")
             return {"Kxx": 0.0, "Kyy": 0.0, "Kzz": 0.0, "Kmean": 0.0}
 
+        # Amitex reads Coeffs.txt and writes thermalCoeff_amitex.txt relative to
+        # the current working directory — so we must run from the VTK's directory.
+        work_dir = vtk_path.parent
+        if not res_path.is_absolute():
+            res_path = work_dir / res_path
+
         # Clean up old results to avoid reading stale data.
         if res_path.exists():
             res_path.unlink()
 
+        prev_dir = os.getcwd()
         print(f"--- Running Amitex Solver on {vtk_path} ---")
         try:
+            os.chdir(work_dir)
             amitex.computeThermalCoeff(str(vtk_path), self.n_cpus)
-            # This usually prints the matrix and writes results_file to disk.
             amitex_out.printThermalCoeff(".")
         except Exception as e:  # pragma: no cover - external solver failure
             print(f"Critical Solver Error: {e}")
+        finally:
+            os.chdir(prev_dir)
 
         if res_path.is_file():
             print(f"Successfully generated {res_path}")

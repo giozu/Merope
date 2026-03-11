@@ -15,7 +15,7 @@ from Optimization_func import optimize_parameters, save_slice_images
 
 # Results folder
 folder_name = 'Result'
-base_path = "/home/alessio/Thesis_Merope/Merope/Optimization_3D_structure"
+base_path = "/home/giovanni/Merope/Optimization_3D_structure"
 folder_path = os.path.join(base_path, folder_name)
 if os.path.exists(folder_path):
     send2trash(folder_path)
