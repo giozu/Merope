@@ -100,6 +100,88 @@ def loeb(phi: np.ndarray, k_m: float = K_MAT) -> np.ndarray:
 # SIMULATION
 # =============================================================================
 
+def recover_results(output_dir: Path) -> pd.DataFrame:
+    """Read existing directories to recreate the CSV without recalculating everything."""
+    import re
+    if not _MEROPE_AVAILABLE:
+        raise RuntimeError(
+            f"Mérope/core modules not found: {_IMPORT_ERROR_MSG}\n"
+            "Activate your Merope environment and re-run."
+        )
+
+    print("=== Recovering K_eff vs Porosity from existing folders ===")
+    L_RVE = float(L_DIM[0])
+    rows: list[dict] = []
+
+    for case_dir in sorted(output_dir.glob("Phi_*_Nvox_*")):
+        if not case_dir.is_dir():
+            continue
+            
+        thermal_file = case_dir / "thermalCoeff_amitex.txt"
+        if not thermal_file.exists():
+            print(f"   [Skipping {case_dir.name}] - No thermalCoeff_amitex.txt found.")
+            continue
+            
+        m = re.match(r"Phi_([0-9\.]+)_Nvox_([0-9]+)", case_dir.name)
+        if not m:
+            continue
+            
+        phi_target = float(m.group(1))
+        current_n_vox = int(m.group(2))
+        
+        # Re-initialize builder to get exact phi_real
+        builder = MicrostructureBuilder(L=L_DIM, n3D=current_n_vox, seed=SEED)
+        multi   = builder.generate_spheres([[SPHERE_R, phi_target]], phase_id=2)
+        struct  = merope.Structure_3D(multi)
+        
+        with ProjectManager().cd(str(case_dir)):
+            fractions = builder.voxellate(struct, K_THERMAL)
+            phi_real  = fractions.get(2, 0.0)
+            
+        coeffs = np.loadtxt(thermal_file)
+        if coeffs.shape == (3, 3):
+            k_eff = np.trace(coeffs) / 3.0
+        else:
+            k_eff = 0.0
+            
+        L_voxel = L_RVE / float(current_n_vox)
+        ratio_LR    = L_RVE / float(SPHERE_R)
+        ratio_Rlvox = float(SPHERE_R) / L_voxel
+        
+        k_maxw   = float(maxwell_eucken(np.array([phi_real]), K_MAT, K_PORE)[0])
+        k_loeb   = float(loeb(np.array([phi_real]), K_MAT)[0])
+        error_perc = abs(k_eff - k_maxw) / k_maxw * 100.0 if k_maxw > 0 else 0.0
+        
+        print(
+            f"   [Recovered N={current_n_vox}] φ_real={phi_real:.4f} | "
+            f"K_sim={k_eff:.4f} | Err={error_perc:.2f}%"
+        )
+        
+        rows.append({
+            "Phi_Target":  phi_target,
+            "Phi_Real":    phi_real,
+            "K_mean":      k_eff,
+            "K_Maxwell":   k_maxw,
+            "K_Loeb":      k_loeb,
+            "Error_Perc":  error_perc,
+            "Ratio_LR":    ratio_LR,
+            "Ratio_Rlvox": ratio_Rlvox,
+            "N_Vox":       current_n_vox
+        })
+        
+    df = pd.DataFrame(rows)
+    if df.empty:
+        print("No valid results found to recover.")
+        return df
+        
+    df = df.sort_values(by=["Phi_Target", "N_Vox"])
+    csv_path = output_dir / "keff_vs_porosity.csv"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    df.to_csv(csv_path, index=False)
+    print(f"\nRecovered {len(df)} results -> {csv_path}")
+    return df
+
+
 def run_simulations(output_dir: Path, no_solver: bool = False) -> pd.DataFrame:
     """Run Mérope + Amitex for each porosity target and return a DataFrame."""
     if not _MEROPE_AVAILABLE:
@@ -269,9 +351,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--plot-only",  action="store_true", help="Load existing CSV and re-plot (skip simulations).")
     parser.add_argument("--no-solver",  action="store_true", help="Skip Amitex solver (generate geometry only).")
+    parser.add_argument("--recover",    action="store_true", help="Recover CSV from existing folders without simulating.")
     args = parser.parse_args()
 
     csv_path = OUTPUT_DIR / "keff_vs_porosity.csv"
+
+    if args.recover:
+        df = recover_results(OUTPUT_DIR)
+        if not df.empty:
+            plot_results(df, OUTPUT_DIR)
+        return
 
     if args.plot_only:
         if not csv_path.exists():
