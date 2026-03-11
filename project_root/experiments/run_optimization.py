@@ -52,6 +52,13 @@ How to run:
     python3 experiments/run_optimization.py --mode interconnected --n-calls 50 --n3d 150
     python3 experiments/run_optimization.py --mode interconnected --n-calls 50 --n3d 150 --run-amitex
 
+    # Log-normale (default, come prima):
+    python3 experiments/run_optimization.py --mode distributed --n-calls 80 --n3d 200
+
+    # Gaussiana (come in inco_Gauss_multi_rad_gen.py):
+    python3 experiments/run_optimization.py --mode distributed --n-calls 80 --n3d 200 --dist-type gaussian
+
+
 """
 
 from __future__ import annotations
@@ -153,9 +160,15 @@ def _build_and_score_distributed(
     phi_large = target_porosity * (1.0 - small_frac)
     phi_small = target_porosity * small_frac
 
-    # --- Population 2: log-normal large pores ---
+    # --- Population 2: large pores with selected distribution ---
+    dist_type = fixed.get("dist_type", "lognormal")
     rng = np.random.default_rng(fixed["seed"])
-    sampled = np.abs(rng.lognormal(mean_r, std_r, num_radii))
+    if dist_type == "gaussian":
+        # mean_radius is in physical units; clip to valid range
+        sampled = np.abs(rng.normal(mean_r, std_r, num_radii))
+    else:
+        # lognormal: mean_r is in log-space
+        sampled = np.abs(rng.lognormal(mean_r, std_r, num_radii))
     sampled = sampled[(sampled >= 0.005) & (sampled <= 3.0)]
     if sampled.size == 0:
         return 0.0
@@ -312,7 +325,15 @@ def _build_and_score_interconnected(
 # Mode-specific configuration
 # ---------------------------------------------------------------------------
 
-def _make_space_distributed() -> List:
+def _make_space_distributed(dist_type: str = "lognormal") -> List:
+    if dist_type == "gaussian":
+        # mean_radius in physical units (not log-space)
+        return [
+            Real(0.01, 1.5,  name="mean_radius"),  # physical mean [domain units]
+            Real(0.01, 0.5,  name="std_radius"),   # physical std
+            Real(0.0,  0.6,  name="small_frac"),
+        ]
+    # default: log-normal (mean_radius in log-space)
     return [
         Real(np.log(0.05), np.log(2.0), name="mean_radius"),
         Real(0.10, 0.60,                name="std_radius"),
@@ -406,7 +427,14 @@ def main() -> None:
         help="Number of 2D slices used for image comparison (default: 99).")
     parser.add_argument("--run-amitex", action="store_true",
         help="Run Amitex on the best geometry and report K_eff.")
-    
+    parser.add_argument(
+        "--dist-type", choices=["lognormal", "gaussian"], default="lognormal",
+        dest="dist_type",
+        help="Radius distribution for distributed porosity: 'lognormal' (default) "
+             "or 'gaussian'. For gaussian, mean_radius is in physical units "
+             "(not log-space); bounds and sampling are adjusted accordingly."
+    )
+
     # testing parameters
     parser.add_argument("--delta", type=float, help="Thickness of inter-granular pores (blue).")
     parser.add_argument("--intra-phi", type=float, dest="intra_phi", help="Volume fraction target for intra-granular pores (red).")
@@ -456,13 +484,13 @@ def main() -> None:
         fixed["num_radii"]    = 6      # log-normal sample count per evaluation
         fixed["small_radius"] = 0.05   # nano-pore radius (physical units, fixed)
         space = _make_space_distributed()
-        x0_guesses = [[np.log(0.5), 0.20, 0.50]] # [mean_radius, std_radius, small_frac] based on thesis and recent tests
 
         @use_named_args(space)
         def objective(**params):
             print(f"\n[Call] mean_radius={params['mean_radius']:.4f}  "
                   f"std_radius={params['std_radius']:.4f}  "
-                  f"small_frac={params['small_frac']:.3f}")
+                  f"small_frac={params['small_frac']:.3f}  "
+                  f"[{args.dist_type}]")
             score = _build_and_score_distributed(params, fixed, exp_image)
             return -score          # gp_minimize minimises → negate
 
