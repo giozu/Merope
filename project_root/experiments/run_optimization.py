@@ -100,7 +100,8 @@ from core.statistics import evaluate_slices, plot_area_distribution
 _EXP_BASE = Path("/home/giovanni/Merope/Optimization_3D_structure/EXP IMG")
 _EXP_IMAGES = {
     "distributed":    str(_EXP_BASE / "exp_distrib_1.png"),
-    "interconnected": str(_EXP_BASE / "exp_interconnect_1.png"),
+    # "interconnected": str(_EXP_BASE / "exp_interconnect_1.png"),
+    "interconnected": str(_EXP_BASE / "slice_x_0015.png"),
 }
 
 # Physical porosity from experiments
@@ -351,7 +352,7 @@ def _make_space_interconnected() -> List:
     return [
         Real(1e-4, 0.15, name="delta"),          # slightly wider: best was at 0.10 limit
         Real(0.05, 0.40, name="intra_phi"),       # narrowed around best (0.10-0.17 range)
-        Real(0.10, 0.60, name="intra_radius"),    # tightened around best (0.34)
+        Real(0.10, 1.20, name="intra_radius"),    # expanded upper bound to match large experimental pores
     ]
 
 
@@ -419,8 +420,8 @@ def main() -> None:
         "--exp-image", default=None,
         help="Path to the experimental reference image (overrides default)."
     )
-    parser.add_argument("--n-calls", type=int, default=20,
-        help="Number of Bayesian optimization calls (default: 20).")
+    parser.add_argument("--n-calls", type=int, default=50,
+        help="Number of Bayesian optimization calls (default: 50).")
     parser.add_argument("--n3d", type=int, default=None,
         help="Voxel resolution per axis (default: 120 distributed / 150 interconnected).")
     parser.add_argument("--n-cpus", type=int, default=4,
@@ -478,8 +479,9 @@ def main() -> None:
         "grid_size":        20,
         "seed":             args.seed,
         "work_dir":         work_dir,
-        "w_data":           0.2,    # weight for image similarity score (matches thesis)
-        "w_por":            0.8,    # weight for porosity fitness (matches thesis)
+        # Optimization weights: w_data triggers morphology match, w_por triggers porosity match
+        "w_data":           0.7,    # increased prioritize morphology (from 0.2)
+        "w_por":            0.3,    # reduced prioritize total porosity (from 0.8)
     }
 
     x0_guesses: List[List[float]] = []
