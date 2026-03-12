@@ -57,7 +57,11 @@ def _normalize(arr: np.ndarray) -> np.ndarray:
     return ((arr.astype(np.float32) - lo) / (hi - lo) * 255).astype(np.uint8)
 
 
-def extract_pore_sizes(image_path: str, area_threshold: int = 30) -> np.ndarray:
+def extract_pore_sizes(
+    image_path: str, 
+    area_threshold: int = 30,
+    um_per_px: float = 1.0,
+) -> np.ndarray:
     """Return equivalent diameters of pore regions detected in *image_path*.
 
     Parameters
@@ -67,10 +71,13 @@ def extract_pore_sizes(image_path: str, area_threshold: int = 30) -> np.ndarray:
     area_threshold:
         Minimum region area in pixels.  Smaller regions are treated as noise.
         Lower → more noise; higher → fewer statistics.
+    um_per_px:
+        Scale factor to convert pixels to physical units. Resulting diameters
+        will be in these units.
 
     Returns
     -------
-    np.ndarray of shape (N,) with equivalent diameters ``2 * sqrt(A/π)``.
+    np.ndarray of shape (N,) with equivalent diameters ``2 * sqrt(A/π) * um_per_px``.
     """
     img = Image.open(image_path).convert("L")
     arr = _normalize(np.array(img))           # contrast-normalize before Otsu
@@ -79,7 +86,7 @@ def extract_pore_sizes(image_path: str, area_threshold: int = 30) -> np.ndarray:
     labeled = label(binary)
     props = regionprops(labeled)
     sizes = [
-        np.sqrt(p.area / np.pi) * 2
+        np.sqrt(p.area / np.pi) * 2 * um_per_px
         for p in props
         if p.area >= area_threshold
     ]
@@ -123,6 +130,8 @@ def compare_images(
     path_real: str,
     path_simulated: str,
     grid_size: int = 20,
+    real_um_per_px: float = 1.0,
+    sim_um_per_px: float = 1.0,
 ) -> Tuple[float, float]:
     """Compute KS and Chi² similarity scores between two images.
 
@@ -134,8 +143,8 @@ def compare_images(
     (ks_score, chi_score) : both are p-values ∈ [0, 1].
         Higher p-values → more similar distributions.
     """
-    sizes_real = extract_pore_sizes(path_real)
-    sizes_sim  = extract_pore_sizes(path_simulated)
+    sizes_real = extract_pore_sizes(path_real, um_per_px=real_um_per_px)
+    sizes_sim  = extract_pore_sizes(path_simulated, um_per_px=sim_um_per_px)
 
     if sizes_real.size == 0 or sizes_sim.size == 0:
         return 0.0, 0.0
@@ -174,6 +183,8 @@ def evaluate_slices(
     n_slices: int = 99,
     grid_size: int = 20,
     temp_dir: str = "tmp_slices",
+    real_um_per_px: float = 1.0,
+    sim_um_per_px: float = 1.0,
 ) -> Dict:
     """Slice *array3d* along all three axes, compare each slice to the
     experimental image, and return a summary dict.
@@ -191,6 +202,8 @@ def evaluate_slices(
         Grid resolution used for the Chi² spatial test.
     temp_dir:
         Temporary directory to store the 2-D PNG slices.
+    real_um_per_px, sim_um_per_px:
+        Scale factors for the KS p-value calculation.
 
     Returns
     -------
@@ -235,7 +248,10 @@ def evaluate_slices(
     results: List[Tuple[str, Dict]] = []
     for name in slice_names:
         path = os.path.join(temp_dir, name)
-        ks, chi = compare_images(experimental_image_path, path, grid_size)
+        ks, chi = compare_images(
+            experimental_image_path, path, grid_size,
+            real_um_per_px=real_um_per_px, sim_um_per_px=sim_um_per_px
+        )
         score = (ks + chi) / 2.0
         results.append((name, {"ks": ks, "chi": chi, "score": score}))
 

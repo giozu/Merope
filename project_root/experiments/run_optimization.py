@@ -99,9 +99,9 @@ from core.statistics import evaluate_slices, plot_area_distribution
 # ---------------------------------------------------------------------------
 _EXP_BASE = Path("/home/giovanni/Merope/Optimization_3D_structure/EXP IMG")
 _EXP_IMAGES = {
-    "distributed":    str(_EXP_BASE / "exp_distrib_1.png"),
+    "distributed":    str(_EXP_BASE / "slice_test_distributed.png"),
     # "interconnected": str(_EXP_BASE / "exp_interconnect_1.png"),
-    "interconnected": str(_EXP_BASE / "slice_x_0015.png"),
+    "interconnected": str(_EXP_BASE / "slice_test_interconnected.png"),
 }
 
 # Physical porosity from experiments
@@ -222,7 +222,9 @@ def _build_and_score_distributed(
         slices_dir = os.path.join(fixed["work_dir"], "tmp_slices")
         eval_res = evaluate_slices(
             array3d, exp_image,
-            n_slices=n_slices, grid_size=grid_size, temp_dir=slices_dir
+            n_slices=n_slices, grid_size=grid_size, temp_dir=slices_dir,
+            real_um_per_px=fixed.get("real_um_per_px", 1.0), 
+            sim_um_per_px=fixed.get("sim_um_per_px", 1.0)
         )
         avg_score = eval_res["average_score"]
 
@@ -308,7 +310,9 @@ def _build_and_score_interconnected(
         slices_dir = os.path.join(fixed["work_dir"], "tmp_slices")
         eval_res = evaluate_slices(
             array3d, exp_image,
-            n_slices=n_slices, grid_size=grid_size, temp_dir=slices_dir
+            n_slices=n_slices, grid_size=grid_size, temp_dir=slices_dir,
+            real_um_per_px=fixed.get("real_um_per_px", 1.0), 
+            sim_um_per_px=fixed.get("sim_um_per_px", 1.0)
         )
         avg_score = eval_res["average_score"]
 
@@ -453,6 +457,22 @@ def main() -> None:
     target_porosity = _TARGET_POROSITY.get(mode, 0.0)
     n3d = args.n3d or (120 if mode == "distributed" else 150)
 
+    # Calculate scale factors for morphology comparison (um per pixel)
+    # ── Real image scale ────────────────────────────────────────────────
+    from PIL import Image
+    try:
+        with Image.open(exp_image) as img:
+            real_w, real_h = img.size
+            # Assume simulation domain builder.L[0] matches the image width
+            real_um_per_px = 10.0 / real_w  # builder.L default is 10.0
+    except Exception as exc:
+        print(f"  [WARNING] Could not determine real image scale: {exc}")
+        real_um_per_px = 1.0
+
+    # ── Simulated image scale ───────────────────────────────────────────
+    # evaluate_slices upscales by 4x
+    sim_um_per_px = 10.0 / (n3d * 4) 
+
     # ── Output directory ─────────────────────────────────────────────────
     output_dir = Path(f"Results_Optimization_{mode.capitalize()}")
     work_dir   = str(output_dir / "work")
@@ -479,17 +499,24 @@ def main() -> None:
         "grid_size":        20,
         "seed":             args.seed,
         "work_dir":         work_dir,
+        "real_um_per_px":   real_um_per_px,
+        "sim_um_per_px":    sim_um_per_px,
         # Optimization weights: w_data triggers morphology match, w_por triggers porosity match
         "w_data":           0.7,    # increased prioritize morphology (from 0.2)
         "w_por":            0.3,    # reduced prioritize total porosity (from 0.8)
     }
 
-    x0_guesses: List[List[float]] = []
-
+    x0_guesses: Optional[List[List[float]]] = None
     if mode == "distributed":
         fixed["num_radii"]    = 6      # log-normal sample count per evaluation
         fixed["small_radius"] = 0.05   # nano-pore radius (physical units, fixed)
         space = _make_space_distributed()
+        
+        # Default guess for distributed mode
+        if args.dist_type == "lognormal":
+            x0_guesses = [[float(np.log(0.1)), 0.2, 0.1]]
+        else:
+            x0_guesses = [[0.1, 0.2, 0.1]]
 
         @use_named_args(space)
         def objective(**params):
@@ -647,6 +674,8 @@ def main() -> None:
             n_slices=args.n_slices,
             grid_size=fixed["grid_size"],
             temp_dir=final_slices_dir,
+            real_um_per_px=real_um_per_px,
+            sim_um_per_px=sim_um_per_px
         )
 
         # Save the best matching slice next to the output
@@ -707,7 +736,12 @@ def main() -> None:
         if best_eval["best"] is not None:
             best_slice_path = str(output_dir / "best_slice.png")
             dist_path = str(output_dir / "area_distribution.png")
-            plot_area_distribution(best_slice_path, exp_image, dist_path)
+            plot_area_distribution(
+                best_slice_path, exp_image, dist_path,
+                exp_um_per_px=real_um_per_px,
+                sim_um_per_px=sim_um_per_px / 4,  # plot_area_distribution handles sim_upscale_factor (default 4) manually?
+                sim_upscale_factor=4
+            )
             print(f"  Area distribution plot → {dist_path}")
 
     except Exception as exc:
