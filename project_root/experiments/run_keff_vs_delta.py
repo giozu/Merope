@@ -55,7 +55,7 @@ def worker(task_args):
 
     grain_radius = _grain_radius_for_phi(p_target, delta)
     # Settings (n3D=64 captures delta=0.1 better than n3D=30)
-    builder = MicrostructureBuilder(L=[10.0, 10.0, 10.0], n3D=64, seed=42)
+    builder = MicrostructureBuilder(L=[10.0, 10.0, 10.0], n3D=N_VOX, seed=42)
     solver  = ThermalSolver(n_cpus=2)
 
     case_dir = OUTPUT_DIR.resolve() / f"P_{p_target:.2f}_Delta_{delta:.3f}"
@@ -77,10 +77,10 @@ def worker(task_args):
     
     for iteration in range(5):
         struct = builder.generate_boundary_confined_structure(
-            grain_radius=3.0,
+            grain_radius=grain_radius,
             delta=delta,
-            pore_radius=0.5,
-            pore_phi=p_target,
+            pore_radius=pore_radius,
+            pore_phi=current_pore_phi,
             confinement_mode="hybrid"
         )
 

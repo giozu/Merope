@@ -187,9 +187,9 @@ class MicrostructureBuilder:
         arr_b = extract(s_base); arr_p = extract(s_pore)
         
         if delta > 10.0:
-            final = np.where(arr_p == 3, 3, 1)
+            final = np.where(arr_p == 3, 2, 1)
         else:
-            final = np.where(np.logical_and(arr_b == 2, arr_p == 3), 3, 1)
+            final = np.where(np.logical_and(arr_b == 2, arr_p == 3), 2, 1)
 
         print(f"  DEBUG: final unique: {np.unique(final)}")
         return self._write_manual_vtk(vtk_path, final, coeffs_path)
