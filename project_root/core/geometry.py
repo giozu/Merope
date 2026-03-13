@@ -374,6 +374,121 @@ class MicrostructureBuilder:
 
         return final_struct
 
+    def generate_boundary_confined_structure(
+        self,
+        grain_radius: float,
+        delta: float,
+        pore_radius: float,
+        pore_phi: float,
+    ) -> "merope.Structure_3D":
+        """Generate structure with spherical pores confined to grain boundary layer.
+
+        This implements the δ-parameter model from the slide:
+        - Small δ → pores squeezed into thin interconnected cracks → low K_eff
+        - Large δ → pores expand into isolated spheres → high K_eff
+
+        Parameters
+        ----------
+        grain_radius :
+            Radius parameter for Laguerre grain seeds.
+        delta :
+            Thickness of the grain-boundary layer where pores are confined.
+        pore_radius :
+            Radius of spherical pores to be clipped.
+        pore_phi :
+            Target volume fraction of pores.
+
+        Returns
+        -------
+        merope.Structure_3D
+            Structure with:
+            - phase 0 = grain interior (matrix)
+            - phase 2 = pores confined to grain boundary layer
+        """
+        if grain_radius <= 0.0:
+            raise ValueError(f"grain_radius must be positive, got {grain_radius}")
+        if delta <= 0.0:
+            raise ValueError(f"delta must be positive, got {delta}")
+        if pore_radius <= 0.0:
+            raise ValueError(f"pore_radius must be positive, got {pore_radius}")
+        if not 0.0 <= pore_phi <= 1.0:
+            raise ValueError(f"pore_phi must be in [0,1], got {pore_phi}")
+
+        L = self.L
+        phase_matrix = 0
+        phase_pore = 2
+
+        # -----------------------------------------------------------------
+        # 1) Generate grain structure with boundary layer mask
+        # -----------------------------------------------------------------
+        # Base structure: grain cores (phase 0) only, no boundary layer yet
+        sph_lag = merope.SphereInclusions_3D()
+        sph_lag.setLength(L)
+        sph_lag.fromHisto(
+            int(self.seed + 2),
+            sac_de_billes.TypeAlgo.RSA,
+            0.0,
+            [[float(grain_radius), 1.0]],
+            [0],
+        )
+        spheres = sph_lag.getSpheres()
+
+        tess_base = merope.LaguerreTess_3D(L, spheres)
+        grains_base = merope.MultiInclusions_3D()
+        grains_base.setInclusions(tess_base)
+        ids = grains_base.getAllIdentifiers()
+        grains_base.changePhase(ids, [phase_matrix for _ in ids])
+        struct_base = merope.Structure_3D(grains_base)
+
+        # -----------------------------------------------------------------
+        # 2) Generate spherical pores
+        # -----------------------------------------------------------------
+        sph_pores = merope.SphereInclusions_3D()
+        sph_pores.setLength(L)
+        if pore_phi > 0.0:
+            sph_pores.fromHisto(
+                int(self.seed + 1),
+                sac_de_billes.TypeAlgo.BOOL,
+                0.0,
+                [[float(pore_radius), float(pore_phi)]],
+                [phase_pore],
+            )
+        m_pores = merope.MultiInclusions_3D()
+        m_pores.setInclusions(sph_pores)
+        struct_pores = merope.Structure_3D(m_pores)
+
+        # -----------------------------------------------------------------
+        # 3) Confine pores to boundary layer
+        # -----------------------------------------------------------------
+        # Merope overlay semantics: Structure_3D(A, B, {x: y})
+        #   → where B != 0, map A's phase x to y
+        #
+        # Create deletion mask: grain cores = phase 1, boundary = phase 0
+        # (so pores are DELETED in cores, KEPT in boundary)
+        tess_del_mask = merope.LaguerreTess_3D(L, spheres)
+        grains_del = merope.MultiInclusions_3D()
+        grains_del.setInclusions(tess_del_mask)
+        ids_del = grains_del.getAllIdentifiers()
+        # First add boundary layer (phase 0), THEN change cores (phase 1)
+        # This way boundary stays 0, cores become 1
+        grains_del.addLayer(ids_del, 0, float(delta))  # boundary = 0
+        grains_del.changePhase(ids_del, [1 for _ in ids_del])  # cores = 1
+        struct_del_mask = merope.Structure_3D(grains_del)
+
+        # Where del_mask == 1 (grain cores), delete pores (map phase 2 → 0)
+        struct_pores_confined = merope.Structure_3D(
+            struct_pores, struct_del_mask, {phase_pore: phase_matrix}
+        )
+
+        # -----------------------------------------------------------------
+        # 4) Return confined structure
+        # -----------------------------------------------------------------
+        # struct_pores_confined already has:
+        #   - phase 0 where there's no pores (matrix)
+        #   - phase 2 where pores survived (confined to boundary layer)
+        # No need for additional overlay!
+        return struct_pores_confined
+
     # ------------------------------------------------------------------
     # Voxellation + homogenization
     # ------------------------------------------------------------------

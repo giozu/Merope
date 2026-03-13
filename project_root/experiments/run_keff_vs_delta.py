@@ -31,13 +31,13 @@ from core.utils import ProjectManager
 L_DIM = [20.0, 20.0, 20.0]    # RVE size (physical units)
 N_VOX = 120                    # Voxel resolution
 
-# Phase convention from generate_polycrystal:
-#   phase 1  = grain interior (matrix)   → K_matrix
-#   phase 2  = grain-boundary film δ     → K_gas  (the porous/crack phase)
-K_THERMAL = [1.0, 1.0, 1e-3]   # index 0 unused, 1=matrix, 2=pore
+# Phase convention from generate_boundary_confined_structure:
+#   phase 0  = grain interior (matrix)   → K_matrix
+#   phase 2  = pores confined to grain boundary layer → K_gas
+K_THERMAL = [1.0, 1.0, 1e-3]   # index 0=matrix, 1=unused, 2=pore
 
 P_TARGETS    = [0.1, 0.2, 0.3]
-DELTA_VALUES = np.linspace(0.05, 1.0, 15)
+DELTA_VALUES = np.linspace(0.05, 1.0, 8)  # Reduced from 15 to 8 for faster testing
 OUTPUT_DIR   = Path("Results_Keff_vs_Delta")
 
 # Grain surface-area-to-volume factor (S_v) for a random Laguerre tessellation.
@@ -73,15 +73,36 @@ def worker(task_args):
     results_file = case_dir / "thermalCoeff_amitex.txt"
 
     # Physical model (from slide):
-    #   generate_polycrystal → phase 1=grain interior (K_matrix), phase 2=GB film (K_gas)
-    #   Small δ → thin connected film  → percolating insulator → K_eff LOW
-    #   Large δ → thick film → grain interior shrinks → pores become isolated → K_eff RISES
-    struct = builder.generate_polycrystal(grain_radius=grain_radius, delta=delta)
+    #   generate_boundary_confined_structure → spherical pores confined to GB layer of thickness δ
+    #   Small δ → pores squeezed into thin interconnected cracks  → percolating insulator → K_eff LOW
+    #   Large δ → pores expand into isolated spheres → distributed porosity → K_eff HIGH
+    #
+    # Parameters:
+    #   - grain_radius: controls grain size (scaled to match target porosity)
+    #   - delta: boundary layer thickness (controls confinement of pores)
+    #   - pore_radius: fixed sphere size for clipping
+    #   - pore_phi_input: inflated porosity (most pores deleted in grain cores)
+    #
+    # The boundary layer volume fraction is approximately:
+    #   phi_boundary ≈ 1 - (1 - delta/R_grain)^3  for spherical grains
+    # For simplicity, we use an empirical scaling factor of 2.0 (since boundary ≈ 50%)
+    pore_radius = 0.4  # Fixed sphere size for clipping
+    # Inflate target porosity to account for pores deleted in grain cores
+    # Empirical factor depends on boundary layer volume fraction
+    # For simplicity, use a conservative factor that works across delta range
+    pore_phi_input = min(p * 6.0, 0.95)  # Cap at 0.95 to avoid packing issues
+    struct = builder.generate_boundary_confined_structure(
+        grain_radius=grain_radius,
+        delta=delta,
+        pore_radius=pore_radius,
+        pore_phi=pore_phi_input,
+    )
 
     fractions = builder.voxellate(struct, K_THERMAL,
                                   vtk_path=vtk_path,
                                   coeffs_path=coeffs_path)
-    p_real = fractions.get(2, 0.0)   # only phase 2 is porous here
+    # Phase 2 = pores confined to boundary layer
+    p_real = fractions.get(2, 0.0)
 
     if no_solver:
         res = {"Kmean": 0.0}
