@@ -90,7 +90,7 @@ def main() -> None:
                         print(f"Skipping solver for {case_name}")
                         results = {"Kxx": 0, "Kyy": 0, "Kzz": 0, "Kmean": 0}
                     else:
-                        results = solver.solve(vtk_path=os.path.join(abs_case_dir, "structure.vtk"))
+                        results = solver.solve(vtk_file=os.path.join(abs_case_dir, "structure.vtk"))
 
                     # 4. Logga i risultati in un summary.txt a livello superiore
                     phi_pore = fractions.get(2, 0.0)  # porosità totale (fase 2)

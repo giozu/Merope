@@ -68,7 +68,7 @@ def main():
                 print(f"Skipping solver for Phi_intra={phi_intra}")
                 results = {"Kxx": 0, "Kyy": 0, "Kzz": 0, "Kmean": 0}
             else:
-                results = solver.solve(vtk_path=os.path.join(abs_case_dir, "structure.vtk"))
+                results = solver.solve(vtk_file=os.path.join(abs_case_dir, "structure.vtk"))
         
             # 4. Log
             log_data = {

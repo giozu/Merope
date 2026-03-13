@@ -77,7 +77,7 @@ def worker(task_args):
         else:
             # solver.solve() expects to find the .vtk in the work_dir
             # ThermalSolver.solve handles the chdir safely
-            res = solver.solve(vtk_path=os.path.join(abs_sub_dir, "structure.vtk"))
+            res = solver.solve(vtk_file=os.path.join(abs_sub_dir, "structure.vtk"))
 
         # 5. Data collection
         phi_real = fractions.get(2, 0.0)

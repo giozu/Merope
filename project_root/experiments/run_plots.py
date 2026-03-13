@@ -81,7 +81,7 @@ def main():
             )
             
             # 4. Solver AMITEX (handles chdir internally)
-            res = solver.solve(vtk_path=os.path.join(abs_case_dir, "structure.vtk"))
+            res = solver.solve(vtk_file=os.path.join(abs_case_dir, "structure.vtk"))
             
             # 5. Raccogli Dati
             phi_real_tot = fractions.get(2, 0.0) # Porosità totale (Sfere + Bordi)

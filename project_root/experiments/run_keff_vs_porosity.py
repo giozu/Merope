@@ -220,7 +220,7 @@ def worker(task_args):
             if no_solver:
                 res = {"Kmean": 0.0}
             else:
-                res = solver.solve(vtk_path=os.path.join(abs_case_dir, "structure.vtk"))
+                res = solver.solve(vtk_file=os.path.join(abs_case_dir, "structure.vtk"))
 
             k_eff = res["Kmean"]
             k_maxw = float(maxwell_eucken(np.array([phi_real]), K_MAT, K_PORE)[0])

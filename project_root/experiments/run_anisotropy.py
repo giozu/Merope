@@ -59,7 +59,7 @@ def main():
                 print(f"Skipping solver for AR={ar:.2f}")
                 results = {"Kxx": 0.0, "Kyy": 0.0, "Kzz": 0.0, "Kmean": 0.0}
             else:
-                results = solver.solve(vtk_path=os.path.join(abs_case_dir, "structure.vtk"))
+                results = solver.solve(vtk_file=os.path.join(abs_case_dir, "structure.vtk"))
             
             # 4. Log results
             log_data = {
