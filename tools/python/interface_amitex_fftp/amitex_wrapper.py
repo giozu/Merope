@@ -93,10 +93,44 @@ def compute_single_thermal_coeff(direction_i, boundaryConditions=None, zone_vtk=
     all_periodic = all([bc[0] == create_sym.BoundaryConditions.Periodic for bc in boundaryConditions])
     if all_periodic:
         flux_fileNames = set_direction(direction_i, coeff_fileName)
-        # mat_xml
-        param_Fourier = ami_xml.Parameters_Fourier_iso(coeff_fileName=coeff_fileName,
-                                                       flux_fileNames=flux_fileNames)
-        mat = ami_xml.Material(coeff_K=coeff_K, list_of_param_single_mat=[param_Fourier])
+        
+        # Read all coefficients
+        with open(coeff_fileName, 'r') as f:
+            all_coeffs = [line.strip() for line in f if line.strip()]
+        
+        num_materials = len(all_coeffs)
+        list_of_params = []
+        
+        for m in range(1, num_materials + 1):
+            # Create a temporary file for this specific material's coefficient
+            # This ensures that Material m reads its specific value
+            m_coeff_file = f"{m}_{coeff_fileName}"
+            with open(m_coeff_file, 'w') as f:
+                f.write(all_coeffs[m-1] + "\n")
+            
+            # We also need specialized flux files if they depend on the material
+            # But here we can reuse the ones from set_direction if they are compatible
+            # Actually, set_direction creates files. We should do the same for flux.
+            m_flux_files = []
+            for f_in in flux_fileNames:
+                # f_in is either coeff_fileName or 0_coeff_fileName
+                if f_in == coeff_fileName:
+                    m_flux_files.append(m_coeff_file)
+                else:
+                    # Create a zero-file for this material
+                    m_zero_file = f"0_{m}_{coeff_fileName}"
+                    with open(m_zero_file, 'w') as f:
+                        f.write("0.0\n")
+                    m_flux_files.append(m_zero_file)
+
+            param_Fourier = ami_xml.Parameters_Fourier_iso(
+                coeff_fileName=m_coeff_file,
+                flux_fileNames=m_flux_files,
+                numM=m
+            )
+            list_of_params.append(param_Fourier)
+            
+        mat = ami_xml.Material(coeff_K=coeff_K, list_of_param_single_mat=list_of_params)
         mat.write_into(mat_xml)
         #
         exec_amitex(zone_vtk, mat_xml, algo_xml, load_xml, direction_i, nb_proc)

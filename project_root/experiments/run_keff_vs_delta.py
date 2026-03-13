@@ -36,8 +36,9 @@ N_VOX = 150                    # High resolution for N=150, L=10 -> dx=0.066
 #   phase 2  = pores confined to grain boundary layer → K_gas
 K_THERMAL = [1.0, 1.0, 1e-3]   # 0=matrix, 1=unused, 2=pore
 
-P_TARGETS    = [0.1, 0.2, 0.3]
-DELTA_VALUES = np.linspace(0.05, 0.8, 10) # 10 points for a smoother curve
+DELTA_VALUES = [0.05, 0.1, 0.2, 0.5]
+P_TARGETS    = [0.1]
+N_SAMPLES    = 1
 OUTPUT_DIR   = Path("Results_Keff_vs_Delta")
 
 R_MIN = 0.5   
@@ -53,7 +54,8 @@ def worker(task_args):
     p_target, delta, no_solver = task_args
 
     grain_radius = _grain_radius_for_phi(p_target, delta)
-    builder = MicrostructureBuilder(L=L_DIM, n3D=N_VOX, seed=42)
+    # Settings (n3D=64 captures delta=0.1 better than n3D=30)
+    builder = MicrostructureBuilder(L=[10.0, 10.0, 10.0], n3D=64, seed=42)
     solver  = ThermalSolver(n_cpus=2)
 
     case_dir = OUTPUT_DIR.resolve() / f"P_{p_target:.2f}_Delta_{delta:.3f}"
@@ -70,16 +72,16 @@ def worker(task_args):
     # So we need pore_phi_input ≈ p_target / phi_boundary
     phi_boundary_approx = 1.0 - (1.0 - delta/grain_radius)**3
     current_pore_phi = min(0.95, p_target / (phi_boundary_approx + 1e-6))
-    
     p_real = 0.0
     struct = None
     
     for iteration in range(5):
         struct = builder.generate_boundary_confined_structure(
-            grain_radius=grain_radius,
+            grain_radius=3.0,
             delta=delta,
-            pore_radius=pore_radius,
-            pore_phi=current_pore_phi,
+            pore_radius=0.5,
+            pore_phi=p_target,
+            confinement_mode="hybrid"
         )
 
         fractions = builder.voxellate(struct, K_THERMAL,
@@ -119,8 +121,9 @@ def run_sweeps(no_solver=False):
     print(f"=== K_eff vs Delta Sweep (Parallel, {len(tasks)} tasks, max_workers=4) ===")
 
     # ProcessPoolExecutor scales extremely well across heavy independent solvers like Amitex
-    with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
-        rows = list(executor.map(worker, tasks))
+    rows = []
+    for t in tasks:
+        rows.append(worker(t))
 
     df = pd.DataFrame(rows)
     df = df.sort_values(by=["Target_P", "Delta"]).reset_index(drop=True)
