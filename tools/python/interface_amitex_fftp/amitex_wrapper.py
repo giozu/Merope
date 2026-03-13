@@ -17,7 +17,7 @@ import vtkreader_merope
 ### Names of files/directories
 ###
 
-AMITEX  = "amitex_fftp" ### put here the amitex executable
+AMITEX  = "/usr/lib/amitex_fftp-v8.17.14/libAmitex/bin/amitex_fftp" 
 
 
 def name_main_dir():

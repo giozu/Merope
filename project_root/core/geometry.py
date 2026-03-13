@@ -6,6 +6,8 @@ from typing import Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequ
 import merope
 import sac_de_billes
 import numpy as np
+import vtk
+from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 
 
 class MicrostructureBuilder:
@@ -552,10 +554,42 @@ class MicrostructureBuilder:
         # Apply thermal coefficients (bakes the phases into the grid).
         grid_repr.apply_homogRule(merope.HomogenizationRule.Voigt, list(K_values))
 
-        # Export for Amitex
+        # --- REFINED VTK EXPORT FOR AMITEX ---
+        # Using vtkDataSetWriter with int32 for MaterialId is more robust for Amitex-FFTP
+        tmp_vtk_path = vtk_path.with_suffix(".tmp.vtk")
         printer = merope.vox.vtk_printer_3D()
         printer.printVTK_segmented(
-            grid_repr, str(vtk_path), str(coeffs_path), nameValue="MaterialId"
+            grid_repr, str(tmp_vtk_path), str(coeffs_path), nameValue="MaterialId"
         )
+        
+        # Read back and convert to int32 to fix Amitex misinterpretation
+        reader = vtk.vtkDataSetReader()
+        reader.SetFileName(str(tmp_vtk_path))
+        reader.Update()
+        ds = reader.GetOutput()
+        
+        # Merge phases if needed (Amitex works better with few zones)
+        old_arr = vtk_to_numpy(ds.GetCellData().GetArray("MaterialId"))
+        new_arr = old_arr.astype(np.int32)
+        
+        # Create final structured points to ensure clean header
+        out_ds = vtk.vtkStructuredPoints()
+        out_ds.SetDimensions(ds.GetDimensions())
+        out_ds.SetOrigin(ds.GetOrigin())
+        out_ds.SetSpacing(ds.GetSpacing())
+        
+        out_scalars = numpy_to_vtk(new_arr, deep=True)
+        out_scalars.SetName("MaterialId")
+        out_ds.GetCellData().SetScalars(out_scalars)
+        
+        writer = vtk.vtkDataSetWriter()
+        writer.SetFileName(str(vtk_path))
+        writer.SetInputData(out_ds)
+        writer.SetFileTypeToBinary()
+        writer.Write()
+        
+        # Cleanup
+        if tmp_vtk_path.exists():
+            tmp_vtk_path.unlink()
 
         return fractions

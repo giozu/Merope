@@ -36,6 +36,7 @@ How to run:
     # Porosità DISTRIBUITA
     python3 experiments/run_optimization.py --mode distributed --n-calls 20
     python3 experiments/run_optimization.py --mode distributed --n-calls 20 --n3d 150
+    python3 experiments/run_optimization.py --mode distributed --n-calls 30 --n3d 250
 
     # Porosità INTERCONNESSA
     python3 experiments/run_optimization.py --mode interconnected --n-calls 20
@@ -52,10 +53,10 @@ How to run:
     python3 experiments/run_optimization.py --mode interconnected --n-calls 50 --n3d 150
     python3 experiments/run_optimization.py --mode interconnected --n-calls 50 --n3d 150 --run-amitex
 
-    # Log-normale (default, come prima):
+    # Log-normale (default):
     python3 experiments/run_optimization.py --mode distributed --n-calls 80 --n3d 200
 
-    # Gaussiana (come in inco_Gauss_multi_rad_gen.py):
+    # Gaussiana:
     python3 experiments/run_optimization.py --mode distributed --n-calls 80 --n3d 200 --dist-type gaussian
 
 
