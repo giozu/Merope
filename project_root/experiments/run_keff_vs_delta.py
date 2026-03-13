@@ -31,10 +31,11 @@ from core.utils import ProjectManager
 L_DIM = [10.0, 10.0, 10.0]    # RVE size (physical units)
 N_VOX = 150                    # High resolution for N=150, L=10 -> dx=0.066
 
-# Phase convention from generate_boundary_confined_structure:
-#   phase 0  = grain interior (matrix)   → K_matrix
-#   phase 2  = pores confined to grain boundary layer → K_gas
-K_THERMAL = [1.0, 1.0, 1e-3]   # 0=matrix, 1=unused, 2=pore
+# Phase convention (Amitex 1-indexed, Coeffs.txt has 3 entries):
+#   phase 1  = grain interior (matrix)       → K=1.0
+#   phase 2  = grain boundary layer (solid)  → K=1.0
+#   phase 3  = pores confined to GB layer    → K=1e-3
+K_THERMAL = [1.0, 1.0, 1e-3]   # Amitex phases 1, 2, 3
 
 DELTA_VALUES = [0.05, 0.1, 0.2, 0.5]
 P_TARGETS    = [0.1]
@@ -87,7 +88,7 @@ def worker(task_args):
         fractions = builder.voxellate(struct, K_THERMAL,
                                       vtk_path=vtk_path,
                                       coeffs_path=coeffs_path)
-        p_real = fractions.get(2, 0.0)
+        p_real = fractions.get(3, 0.0)
         
         if abs(p_real - p_target) < 0.005 or current_pore_phi >= 0.98 or p_real == 0:
             if iteration > 0: break
