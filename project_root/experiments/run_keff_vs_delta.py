@@ -29,15 +29,19 @@ from core.utils import ProjectManager
 
 # --- Configuration ---
 L_DIM = [10.0, 10.0, 10.0]    # RVE size (physical units)
-N_VOX = 40                   
+N_VOX = 40
 K_THERMAL = [1.0, 1e-3, 1.0]   # Phase 1=Matrix, 2=Pore, 3=Boundary(Solid)
-FIXED_GRAIN_R = 1.5            # Smaller grains = more boundary volume
 
-DELTA_VALUES = [0.05, 0.1, 0.2, 0.4, 0.6, 1.0]
-P_TARGETS    = [0.1]
+# Normalized grain radius L_grain = 1.0 (adimensionalization)
+# This makes delta a relative parameter: delta/L_grain ∈ [0, 1]
+FIXED_GRAIN_R = 1.0
+
+# Delta values: 0 → interconnected cracks, 1 → distributed (full grain size)
+DELTA_VALUES = [0.01, 0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 1.0]
+P_TARGETS    = [0.1, 0.2, 0.3]
 OUTPUT_DIR   = Path("Results_Keff_vs_Delta")
 
-R_MIN = 0.5   
+R_MIN = 0.5
 R_MAX = 4.0   
 
 def _grain_radius_for_phi(p: float, delta: float) -> float:
@@ -49,7 +53,7 @@ def _grain_radius_for_phi(p: float, delta: float) -> float:
 def worker(task_args):
     p_target, delta, no_solver = task_args
 
-    grain_radius = FIXED_GRAIN_R
+    grain_radius = FIXED_GRAIN_R  # Fixed at 1.0 (normalized L_grain)
     builder = MicrostructureBuilder(L=L_DIM, n3D=N_VOX, seed=42)
     solver  = ThermalSolver(n_cpus=1)
 
@@ -60,32 +64,93 @@ def worker(task_args):
     coeffs_path  = case_dir / "Coeffs.txt"
     results_file = case_dir / "thermalCoeff_amitex.txt"
 
-    # Iterative adjustment of pore_phi_input to hit p_target precisely
-    pore_radius = max(0.4, delta * 0.8) # Keep spheres slightly smaller than layer if delta is big
-    
-    # Initial guess: phi_boundary ≈ 3*delta/R. Pores are only kept in boundary.
-    # So we need pore_phi_input ≈ p_target / phi_boundary
-    phi_boundary_approx = 1.0 - (1.0 - delta/grain_radius)**3
-    current_pore_phi = min(0.95, p_target / (phi_boundary_approx + 1e-6))
-    p_real = 0.0
-    struct = None
-    
-    for iteration in range(5):
-        arr = builder.generate_boundary_confined_structure_array(
-            grain_radius=grain_radius,
-            delta=delta,
-            pore_radius=pore_radius,
-            pore_phi=current_pore_phi,
-        )
+    # CORRECT PHYSICS from iter_delta_IGB_calc.py:
+    # - Total porosity p_target = fixed
+    # - delta = thickness of grain boundary layer (inter-granular network)
+    # - As delta increases:
+    #   * Boundary layer occupies more volume
+    #   * Less space/need for inter-granular spherical pores
+    #   * Morphology shifts from interconnected (delta small) to distributed (delta large)
+    #   * K_eff INCREASES (less interconnection bottleneck)
+    #
+    # Implementation:
+    # - Use generate_interconnected_structure with:
+    #   * intra_phi: spherical pores INSIDE grains (always distributed)
+    #   * delta: boundary layer thickness
+    #   * Total porosity ≈ phi_intra + phi_boundary
+    # - As delta increases, reduce intra_phi to keep total porosity constant
 
-        fractions = builder.voxellate(arr, vtk_path=vtk_path)
-        p_real = fractions.get(2, 0.0)
-        
-        if abs(p_real - p_target) < 0.005 or current_pore_phi >= 0.98 or p_real == 0:
-            if iteration > 0: break
-            
-        ratio = p_target / (p_real + 1e-7)
-        current_pore_phi = min(0.99, current_pore_phi * ratio)
+    # STRATEGY: Vary grain_radius to control boundary layer porosity
+    # For a given delta, find R such that total porosity ≈ p_target
+    # phi_boundary(delta, R) ≈ 1 - (1 - delta/R)³
+    # We want phi_boundary + phi_intra ≈ p_target
+    # Start by trying to make boundary layer contribute ~70% of target porosity
+
+    # Initial guess for grain_radius: make boundary layer ≈ 70% of target
+    phi_boundary_target = p_target * 0.7
+    if phi_boundary_target > 0.01:
+        # From phi ≈ 1 - (1 - delta/R)³, solve for R
+        grain_radius = delta / (1.0 - (1.0 - phi_boundary_target)**(1.0/3.0) + 1e-9)
+    else:
+        grain_radius = delta / (phi_boundary_target + 0.01)
+
+    grain_radius = float(np.clip(grain_radius, 0.5, 8.0))
+
+    intra_phi_input = 0.1  # Start with moderate intra porosity
+    intra_radius = 0.1  # Small distributed pores
+    p_real = 0.0
+
+    # Iterative refinement to hit p_target
+    for iteration in range(12):
+        try:
+            struct = builder.generate_interconnected_structure(
+                inter_radius=0.0,     # No separate inter-granular spheres
+                inter_phi=0.0,
+                intra_radius=intra_radius,
+                intra_phi=intra_phi_input,
+                grain_radius=grain_radius,
+                grain_phi=1.0,
+                delta=delta,
+            )
+
+            fractions = builder.voxellate(struct, K_THERMAL, vtk_path, coeffs_path)
+            # Phase 0 = matrix, Phase 1 = intra pores, Phase 2 = boundary layer
+            # Total porosity = phase 1 + phase 2
+            phi_intra = fractions.get(1, 0.0)
+            phi_boundary = fractions.get(2, 0.0)
+            p_real = phi_intra + phi_boundary
+
+            print(f"   [Iter {iteration}] delta={delta:.3f}, R={grain_radius:.2f}, intra_in={intra_phi_input:.3f} -> bound={phi_boundary:.3f}, intra={phi_intra:.3f}, tot={p_real:.3f} (tgt={p_target:.2f})")
+
+            if abs(p_real - p_target) < 0.02:  # Converged
+                break
+
+            # Adjust both grain_radius and intra_phi
+            error = p_target - p_real
+
+            # If total porosity is way off, adjust grain radius first (controls boundary layer)
+            if abs(error) > 0.08:
+                # More porosity needed → smaller grains
+                # Less porosity needed → larger grains
+                if error > 0:
+                    grain_radius *= 0.8
+                else:
+                    grain_radius *= 1.25
+                grain_radius = float(np.clip(grain_radius, 0.5, 8.0))
+
+            # Fine-tune with intra_phi
+            intra_phi_input += error * 0.6
+            intra_phi_input = float(np.clip(intra_phi_input, 0.005, 0.85))
+
+        except RuntimeError as e:
+            # If RSA fails, try adjusting grain radius
+            print(f"   [Iter {iteration}] RSA error, trying larger grains")
+            grain_radius *= 1.3
+            grain_radius = float(np.clip(grain_radius, 0.5, 8.0))
+            intra_phi_input = max(0.005, intra_phi_input * 0.5)
+            if iteration > 8:
+                print(f"   Accepting p_real={p_real:.4f}")
+                break
 
     if no_solver:
         res = {"Kmean": 0.0}
@@ -93,7 +158,7 @@ def worker(task_args):
         res = solver.solve(vtk_file=vtk_path, results_file=results_file)
 
     k_eff = res["Kmean"]
-    print(f" [DONE] P={p_target:.2f} | delta={delta:.3f} | Real phi={p_real:.4f} -> K_eff={k_eff:.4f}")
+    print(f" [DONE] P={p_target:.2f} | delta={delta:.3f} | phi={p_real:.4f} -> K_eff={k_eff:.4f}")
 
     return {
         "Target_P":    p_target,
