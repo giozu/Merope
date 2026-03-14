@@ -61,7 +61,7 @@ N_VOX_STEP     = 30             # How much to increase N_VOX each time
 
 # Sphere radius / porosity sweep
 SPHERE_R  = 0.5                          # pore radius [same units as L_DIM]
-PHI_VALUES = np.linspace(0.01, 0.20, 5)  # porosity range to simulate
+PHI_VALUES = np.linspace(0.10, 0.20, 2)  # porosity range to simulate
 
 # Thermal properties
 K_MAT  = 1.0    # matrix conductivity  [W/m·K]  (normalised to 1)
