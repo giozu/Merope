@@ -61,7 +61,7 @@ N_VOX_STEP     = 30             # How much to increase N_VOX each time
 
 # Sphere radius / porosity sweep
 SPHERE_R  = 0.5                          # pore radius [same units as L_DIM]
-PHI_VALUES = np.linspace(0.01, 0.30, 20) # porosity range to simulate
+PHI_VALUES = np.linspace(0.01, 0.20, 5)  # porosity range to simulate
 
 # Thermal properties
 K_MAT  = 1.0    # matrix conductivity  [W/m·K]  (normalised to 1)
@@ -129,15 +129,17 @@ def recover_results(output_dir: Path) -> pd.DataFrame:
         builder = MicrostructureBuilder(L=L_DIM, n3D=current_n_vox, seed=SEED)
         multi   = builder.generate_spheres([[SPHERE_R, phi_target]], phase_id=2)
         struct  = merope.Structure_3D(multi)
-        
-        # Voxelize (passing absolute path)
-        fractions = builder.voxellate(
-            struct, 
-            K_THERMAL, 
-            vtk_path=case_dir / "structure.vtk",
-            coeffs_path=case_dir / "Coeffs.txt"
+
+        # Voxelize structure directly via Mérope (reconstruct percentages)
+        grid_params = merope.vox.create_grid_parameters_N_L_3D(
+            [current_n_vox, current_n_vox, current_n_vox], L_DIM
         )
-        phi_real  = fractions.get(2, 0.0)
+        grid = merope.vox.GridRepresentation_3D(
+            struct, grid_params, merope.vox.VoxelRule.Average
+        )
+        analyzer = merope.vox.GridAnalyzer_3D()
+        fractions = analyzer.compute_percentages(grid)
+        phi_real = fractions.get(2, 0.0)
             
         coeffs = np.loadtxt(thermal_file)
         if coeffs.shape == (3, 3):
@@ -193,11 +195,11 @@ def worker(task_args):
 
     while True:
         builder = MicrostructureBuilder(L=L_DIM, n3D=current_n_vox, seed=SEED)
-        
+
         import merope
         multi = builder.generate_spheres([[SPHERE_R, float(phi_target)]], phase_id=2)
         struct = merope.Structure_3D(multi)
-        
+
         L_voxel = L_RVE / float(current_n_vox)
         ratio_LR = L_RVE / float(SPHERE_R)
         ratio_Rlvox = float(SPHERE_R) / L_voxel
@@ -207,14 +209,27 @@ def worker(task_args):
         abs_case_dir = str(case_dir)
         
         try:
-            # 1. Voxelization (passing absolute paths)
-            fractions = builder.voxellate(
-                struct, 
-                K_THERMAL, 
-                vtk_path=case_dir / "structure.vtk",
-                coeffs_path=case_dir / "Coeffs.txt"
+            # 1. Voxelization: build grid, apply homogenization, and write VTK for Amitex
+            grid_params = merope.vox.create_grid_parameters_N_L_3D(
+                [current_n_vox, current_n_vox, current_n_vox], L_DIM
             )
+            grid = merope.vox.GridRepresentation_3D(
+                struct, grid_params, merope.vox.VoxelRule.Average
+            )
+            analyzer = merope.vox.GridAnalyzer_3D()
+            fractions = analyzer.compute_percentages(grid)
             phi_real = fractions.get(2, 0.0)
+
+            # Bake thermal coefficients into the grid before printing
+            grid.apply_homogRule(merope.HomogenizationRule.Voigt, K_THERMAL)
+
+            printer = merope.vox.vtk_printer_3D()
+            printer.printVTK_segmented(
+                grid,
+                str(case_dir / "structure.vtk"),
+                str(case_dir / "Coeffs.txt"),
+                nameValue="MaterialId",
+            )
 
             # 2. AMITEX Solver (internally handles chdir safely)
             if no_solver:
@@ -227,6 +242,15 @@ def worker(task_args):
             k_loeb = float(loeb(np.array([phi_real]), K_MAT)[0])
             
             error_perc = abs(k_eff - k_loeb) / k_loeb * 100.0 if k_loeb > 0 else 0.0
+
+            # If Amitex failed to produce a meaningful conductivity (Kmean=0 with pores present),
+            # treat this run as invalid rather than as a "perfect insulator".
+            if (not no_solver) and (phi_real > 0.0) and (k_eff == 0.0):
+                print(
+                    "   [ERROR] Amitex returned Kmean=0.0 with non-zero porosity; "
+                    "marking this case as invalid."
+                )
+                return None
                 
             print(
                 f"   [DONE N={current_n_vox}] φ_target={phi_target:.3f} | φ_real={phi_real:.4f} | R/l_vox={ratio_Rlvox:.2f} | "
@@ -279,8 +303,12 @@ def run_simulations(output_dir: Path, no_solver: bool = False) -> pd.DataFrame:
         raw_results = list(executor.map(worker, tasks))
 
     rows = [r for r in raw_results if r is not None]
-    
+
     df = pd.DataFrame(rows)
+    if df.empty:
+        print("No valid results produced; nothing to save.")
+        return df
+
     df = df.sort_values(by=["Phi_Target", "N_Vox"]).reset_index(drop=True)
     csv_path = output_dir / "keff_vs_porosity.csv"
     df.to_csv(csv_path, index=False)
@@ -405,6 +433,11 @@ def main() -> None:
                 df["Ratio_Rlvox"] = float(SPHERE_R) / (L_RVE / df["N_Vox"])
     else:
         df = run_simulations(OUTPUT_DIR, no_solver=args.no_solver)
+
+    # If simulations produced no valid rows, skip plotting gracefully
+    if df is None or df.empty:
+        print("No results to plot.")
+        return
 
     plot_results(df, OUTPUT_DIR)
 

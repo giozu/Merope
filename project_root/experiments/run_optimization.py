@@ -632,18 +632,34 @@ def main() -> None:
 
         best_vtk_dir = str(output_dir / "best_geometry")
         with pm.cd(best_vtk_dir):
-            fractions = builder.voxellate(struct, K_THERMAL)
-            phi_real = fractions.get(1, 0.0) + fractions.get(2, 0.0)
-
+            # Build grid from final structure
             grid_params = merope.vox.create_grid_parameters_N_L_3D(
                 [builder.n3D] * 3, builder.L
             )
             grid = merope.vox.GridRepresentation_3D(
                 struct, grid_params, merope.vox.VoxelRule.Average
             )
+
+            # Compute phase fractions (for summary)
+            analyzer = merope.vox.GridAnalyzer_3D()
+            fracs = analyzer.compute_percentages(grid)
+            if mode == "distributed":
+                # pores are in phase 2 only
+                phi_real = fracs.get(2, 0.0)
+            else:
+                # interconnected: porosity from phases 1 and 2
+                phi_real = fracs.get(1, 0.0) + fracs.get(2, 0.0)
+
+            # Apply thermal coefficients and export VTK for Amitex
             grid.apply_homogRule(
                 merope.HomogenizationRule.Voigt, list(K_THERMAL)
             )
+            printer = merope.vox.vtk_printer_3D()
+            printer.printVTK_segmented(
+                grid, "structure.vtk", "Coeffs.txt", nameValue="MaterialId"
+            )
+
+            # Extract 3D array for image-based evaluation
             conv_np = merope.vox.NumpyConverter_3D()
             best_array3d = conv_np.compute_RealField(grid).reshape(
                 (builder.n3D,) * 3, order='C'
@@ -665,7 +681,7 @@ def main() -> None:
             k_eff_result: Dict[str, float] = {}
             if args.run_amitex:
                 solver = ThermalSolver(n_cpus=args.n_cpus)
-                k_eff_result = solver.solve()
+                k_eff_result = solver.solve(vtk_file="structure.vtk")
                 print(f"  K_eff (Amitex) → Kmean = {k_eff_result.get('Kmean', 0):.5f}")
 
         # ── Slice evaluation on the best geometry ───────────────────────

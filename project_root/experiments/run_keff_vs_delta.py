@@ -29,17 +29,12 @@ from core.utils import ProjectManager
 
 # --- Configuration ---
 L_DIM = [10.0, 10.0, 10.0]    # RVE size (physical units)
-N_VOX = 150                    # High resolution for N=150, L=10 -> dx=0.066
+N_VOX = 40                   
+K_THERMAL = [1.0, 1e-3, 1.0]   # Phase 1=Matrix, 2=Pore, 3=Boundary(Solid)
+FIXED_GRAIN_R = 1.5            # Smaller grains = more boundary volume
 
-# Phase convention (Amitex 1-indexed, Coeffs.txt has 3 entries):
-#   phase 1  = grain interior (matrix)       → K=1.0
-#   phase 2  = grain boundary layer (solid)  → K=1.0
-#   phase 3  = pores confined to GB layer    → K=1e-3
-K_THERMAL = [1.0, 1.0, 1e-3]   # Amitex phases 1, 2, 3
-
-DELTA_VALUES = [0.05, 0.1, 0.2, 0.5]
+DELTA_VALUES = [0.05, 0.1, 0.2, 0.4, 0.6, 1.0]
 P_TARGETS    = [0.1]
-N_SAMPLES    = 1
 OUTPUT_DIR   = Path("Results_Keff_vs_Delta")
 
 R_MIN = 0.5   
@@ -54,10 +49,9 @@ def _grain_radius_for_phi(p: float, delta: float) -> float:
 def worker(task_args):
     p_target, delta, no_solver = task_args
 
-    grain_radius = _grain_radius_for_phi(p_target, delta)
-    # Settings (n3D=64 captures delta=0.1 better than n3D=30)
-    builder = MicrostructureBuilder(L=[10.0, 10.0, 10.0], n3D=N_VOX, seed=42)
-    solver  = ThermalSolver(n_cpus=2)
+    grain_radius = FIXED_GRAIN_R
+    builder = MicrostructureBuilder(L=L_DIM, n3D=N_VOX, seed=42)
+    solver  = ThermalSolver(n_cpus=1)
 
     case_dir = OUTPUT_DIR.resolve() / f"P_{p_target:.2f}_Delta_{delta:.3f}"
     case_dir.mkdir(parents=True, exist_ok=True)
@@ -77,18 +71,15 @@ def worker(task_args):
     struct = None
     
     for iteration in range(5):
-        struct = builder.generate_boundary_confined_structure(
+        arr = builder.generate_boundary_confined_structure_array(
             grain_radius=grain_radius,
             delta=delta,
             pore_radius=pore_radius,
             pore_phi=current_pore_phi,
-            confinement_mode="hybrid"
         )
 
-        fractions = builder.voxellate(struct, K_THERMAL,
-                                      vtk_path=vtk_path,
-                                      coeffs_path=coeffs_path)
-        p_real = fractions.get(3, 0.0)
+        fractions = builder.voxellate(arr, vtk_path=vtk_path)
+        p_real = fractions.get(2, 0.0)
         
         if abs(p_real - p_target) < 0.005 or current_pore_phi >= 0.98 or p_real == 0:
             if iteration > 0: break

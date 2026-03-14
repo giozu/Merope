@@ -9,36 +9,10 @@ import contextlib
 
 import merope
 import sac_de_billes
-import numpy as np
 import vtk
-from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
-
-@contextlib.contextmanager
-def temp_dir():
-    """Context manager for a temporary directory."""
-    name = tempfile.mkdtemp()
-    try:
-        yield name
-    finally:
-        shutil.rmtree(name)
-
-def load_vtk(path: Union[str, Path]) -> np.ndarray:
-    """Load a VTK file and return its cell data as a NumPy array."""
-    reader = vtk.vtkDataSetReader()
-    reader.SetFileName(str(path))
-    reader.Update()
-    array = reader.GetOutput().GetCellData().GetArray("MaterialId")
-    if array is None:
-        raise ValueError(f"No 'MaterialId' array found in {path}")
-    return vtk_to_numpy(array).astype(np.int32)
-
-class ConfinementWrapper:
-    """Helper to pass grains and unconfined pores to voxellate for manual clipping."""
-    def __init__(self, struct_base, struct_pores, delta):
-        self.struct_base = struct_base
-        self.struct_pores = struct_pores
-        self.delta = delta
-
+from vtk.util.numpy_support import vtk_to_numpy
+from typing import Union, Sequence, Dict
+from pathlib import Path
 
 class MicrostructureBuilder:
     """Factory for Mérope polycrystals and porous microstructures."""
@@ -125,101 +99,34 @@ class MicrostructureBuilder:
 
         s_intra_restricted = merope.Structure_3D(s_intra, struct_mask, {1: 0})
         return merope.Structure_3D(struct_base, s_intra_restricted, {0: 1})
-
-    def generate_boundary_confined_structure(
-        self,
-        grain_radius: float,
-        delta: float,
-        pore_radius: float,
-        pore_phi: float,
-        confinement_mode: str = "standard"
-    ) -> Union["merope.Structure_3D", ConfinementWrapper]:
-        """Generate structure with spherical pores confined to grain boundary layer."""
-        L = self.L
-        # Standardization: 1=Matrix, 2=Mask, 3=Pores
-        sph_lag = merope.SphereInclusions_3D()
-        sph_lag.setLength(L)
-        sph_lag.fromHisto(int(self.seed + 2), sac_de_billes.TypeAlgo.RSA, 0.0, [[float(grain_radius), 1.0]], [1])
-        tess = merope.LaguerreTess_3D(L, sph_lag.getSpheres())
-        m_base = merope.MultiInclusions_3D()
-        m_base.setInclusions(tess)
-        ids = m_base.getAllIdentifiers()
-        m_base.changePhase(ids, [1 for _ in ids])
-        if delta > 0.0:
-            m_base.addLayer(ids, 2, float(delta))
-        s_base = merope.Structure_3D(m_base)
-
-        sph_pores = merope.SphereInclusions_3D()
-        sph_pores.setLength(L)
-        if pore_phi > 0.0:
-            sph_pores.fromHisto(int(self.seed + 1), sac_de_billes.TypeAlgo.BOOL, 0.0, [[float(pore_radius), float(pore_phi)]], [3])
-        m_pores = merope.MultiInclusions_3D()
-        m_pores.setInclusions(sph_pores)
-        s_pores = merope.Structure_3D(m_pores)
-
-        if confinement_mode == "standard":
-            return merope.Structure_3D(s_base, s_pores, {})
-        return ConfinementWrapper(s_base, s_pores, delta)
-
+        
     def voxellate(
         self,
-        structure: Union["merope.Structure_3D", ConfinementWrapper],
-        K_values: Sequence[float],
+        arr: np.ndarray,
         vtk_path: Union[str, Path] = "structure.vtk",
-        coeffs_path: Union[str, Path] = "Coeffs.txt",
     ) -> Dict[int, float]:
-        """Convert structure to VTK using robust NumPy extraction."""
-        vtk_path = Path(vtk_path); coeffs_path = Path(coeffs_path)
+        vtk_path = Path(vtk_path)
         vtk_path.parent.mkdir(parents=True, exist_ok=True)
-        coeffs_path.parent.mkdir(parents=True, exist_ok=True)
-
-        if isinstance(structure, ConfinementWrapper):
-            s_base = structure.struct_base; s_pore = structure.struct_pores; delta = structure.delta
-        else:
-            s_base = structure; s_pore = structure; delta = 999.0
-
-        def extract(s_obj):
-            grid = merope.vox.GridRepresentation_3D(s_obj, self.grid_params, merope.vox.VoxelRule.Average)
-            grid.apply_homogRule(merope.HomogenizationRule.Voigt, [float(i) for i in range(20)])
-            field = merope.vox.NumpyConverter_3D().compute_RealField(grid)
-            return np.round(field).astype(np.int32).reshape((self.n3D, self.n3D, self.n3D))
-
-        arr_b = extract(s_base); arr_p = extract(s_pore)
         
-        if delta > 10.0:
-            final = np.where(arr_p == 3, 3, np.where(arr_p == 2, 2, 1))
-        else:
-            # grain interior=1, boundary layer=2, confined pore=3
-            final = np.where(arr_b == 2, 2, 1)
-            final = np.where(np.logical_and(arr_b == 2, arr_p == 3), 3, final)
-
-        print(f"  DEBUG: final unique: {np.unique(final)}")
-        return self._write_manual_vtk(vtk_path, final, coeffs_path)
-
-    def _write_manual_vtk(self, path: Path, arr: np.ndarray, coeffs_path: Path) -> Dict[int, float]:
-        nx = ny = nz = self.n3D
-        dx, dy, dz = self.L[0]/nx, self.L[1]/ny, self.L[2]/nz
+        nx = ny = nz = self.n3D + 1
+        spacing = [float(self.L[i])/self.n3D for i in range(3)]
         
-        # Use VTK library to write a proper BINARY file
-        vtk_arr = numpy_to_vtk(arr.flatten(), deep=True, array_type=vtk.VTK_INT)
-        vtk_arr.SetName("MaterialId")
+        header = (
+            f"# vtk DataFile Version 4.0\r\n"
+            f"Amitex Sanitized\r\n"
+            f"BINARY\r\n"
+            f"DATASET STRUCTURED_POINTS\r\n"
+            f"DIMENSIONS {nx} {ny} {nz}\r\n"
+            f"ORIGIN  0. 0. 0.\r\n"
+            f"SPACING {spacing[0]} {spacing[1]} {spacing[2]}\r\n"
+            f"CELL_DATA {arr.size}\r\n"
+            f"SCALARS MaterialId unsigned_short\r\n"
+            f"LOOKUP_TABLE default\r\n"
+        ).encode()
         
-        grid = vtk.vtkStructuredPoints()
-        grid.SetDimensions(nx+1, ny+1, nz+1)
-        grid.SetSpacing(dx, dy, dz)
-        grid.SetOrigin(0.0, 0.0, 0.0)
-        grid.GetCellData().SetScalars(vtk_arr)
-        
-        writer = vtk.vtkDataSetWriter()
-        writer.SetFileName(str(path))
-        writer.SetFileTypeToBinary()
-        writer.SetInputData(grid)
-        writer.Write()
-        
-        fracs = {}
+        with open(vtk_path, "wb") as f:
+            f.write(header)
+            # Use Big-Endian uint16
+            f.write(arr.astype('>u2').tobytes())
         uids, counts = np.unique(arr, return_counts=True)
-        for u, c in zip(uids, counts): fracs[int(u)] = float(c) / arr.size
-        
-        with open(coeffs_path, "w") as f:
-            f.write("1.0\n1.0\n0.001\n")
-        return fracs
+        return {int(u): float(c)/arr.size for u, c in zip(uids, counts)}

@@ -1,118 +1,115 @@
-from __future__ import annotations
-
 import os
+import numpy as np
+import vtk
+import subprocess
 from pathlib import Path
 from typing import Dict, Union
-
-import interface_amitex_fftp.amitex_wrapper as amitex
-import interface_amitex_fftp.post_processing as amitex_out
-import numpy as np
-
+from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
+import interface_amitex_fftp.amitex_xml_writer as ami_xml
 
 class ThermalSolver:
-    """Thin wrapper around Amitex-FFTP for thermal conductivity problems.
-
-    This class is intentionally minimal: it assumes that a segmented VTK file
-    compatible with Amitex has already been written to disk (typically via
-    :meth:`core.geometry.MicrostructureBuilder.voxellate`).
-    """
-
     def __init__(self, n_cpus: int = 4) -> None:
-        """Create a solver instance.
-
-        Parameters
-        ----------
-        n_cpus :
-            Number of MPI processes (or threads, depending on your Amitex
-            build) to use when calling ``computeThermalCoeff``.
-        """
-        if n_cpus <= 0:
-            raise ValueError(f"n_cpus must be positive, got {n_cpus}")
         self.n_cpus: int = int(n_cpus)
+        self.amitex_bin = "/usr/lib/amitex_fftp-v8.17.14/libAmitex/bin/amitex_fftp"
 
     def solve(
         self,
         vtk_file: Union[str, Path] = "structure.vtk",
         results_file: Union[str, Path] = "thermalCoeff_amitex.txt",
     ) -> Dict[str, float]:
-        """Run Amitex on a given VTK file and parse the homogenized tensor.
-
-        Parameters
-        ----------
-        vtk_file :
-            Path to the segmented VTK file exported by Mérope. The file must
-            exist and be readable by Amitex.
-        results_file :
-            Path where Amitex writes the effective conductivity matrix (ASCII).
-            The default corresponds to the standard ``printThermalCoeff`` output.
-
-        Returns
-        -------
-        dict[str, float]
-            A dictionary with keys ``\"Kxx\"``, ``\"Kyy\"``, ``\"Kzz\"`` and
-            ``\"Kmean\"`` (mean of the diagonal). If anything goes wrong
-            (missing files, parse errors, etc.), all values are set to zero.
-        """
         vtk_path = Path(vtk_file).resolve()
         res_path = Path(results_file)
+        if not vtk_path.is_file(): return {"Kmean": 0.0}
 
-        if not vtk_path.is_file():
-            print(f"ERROR: VTK file not found, skipping Amitex run: {vtk_path}")
-            return {"Kxx": 0.0, "Kyy": 0.0, "Kzz": 0.0, "Kmean": 0.0}
-
-        # Amitex reads Coeffs.txt and writes thermalCoeff_amitex.txt relative to
-        # the current working directory — so we must run from the VTK's directory.
         work_dir = vtk_path.parent
-        if not res_path.is_absolute():
-            res_path = work_dir / res_path
-
-        # Clean up old results to avoid reading stale data.
-        if res_path.exists():
-            res_path.unlink()
+        if not res_path.is_absolute(): res_path = work_dir / res_path
+        if res_path.exists(): res_path.unlink()
 
         prev_dir = os.getcwd()
-        print(f"--- Running Amitex Solver on {vtk_path} ---")
         try:
             os.chdir(work_dir)
-            amitex.computeThermalCoeff(str(vtk_path), self.n_cpus)
-            amitex_out.printThermalCoeff(".")
-        except Exception as e:  # pragma: no cover - external solver failure
-            print(f"Critical Solver Error: {e}")
+            
+            # 1. READ AND SANITIZE VTK
+            reader = vtk.vtkDataSetReader()
+            reader.SetFileName(str(vtk_path))
+            reader.Update()
+            grid = reader.GetOutput()
+            
+            scalars = grid.GetCellData().GetScalars("MaterialId")
+            if not scalars: scalars = grid.GetCellData().GetScalars()
+            
+            # Collapse IDs: Everything > 3 goes to 1. 0 goes to 1.
+            arr = vtk_to_numpy(scalars).copy().astype(np.uint16)
+            arr[arr > 3] = 1
+            arr[arr == 0] = 1
+            
+            # Detect what we actually have
+            active_phases = sorted([int(p) for p in np.unique(arr)])
+            print(f"  [Solver] Sanitized VTK - Phases detected: {active_phases}")
+
+            # 2. WRITE BINARY VTK (Using standard VTK library)
+            vtk_arr = numpy_to_vtk(arr, deep=True)
+            vtk_arr.SetName("MaterialId")
+            
+            new_grid = vtk.vtkStructuredPoints()
+            new_grid.SetDimensions(grid.GetDimensions())
+            new_grid.SetSpacing(grid.GetSpacing())
+            new_grid.SetOrigin(grid.GetOrigin())
+            new_grid.GetCellData().SetScalars(vtk_arr)
+            
+            writer = vtk.vtkDataSetWriter()
+            writer.SetFileName(str(vtk_path))
+            writer.SetInputData(new_grid)
+            writer.SetFileTypeToBinary()
+            writer.Write()
+            
+            # 3. DYNAMIC XML for detected phases
+            self._write_xml(work_dir, active_phases)
+            
+            # 4. SIMULATE
+            for i in range(1, 4):
+                load_vals = [0., 0., 0.]; load_vals[i-1] = 1.0
+                load_conf = ami_xml.Loading_diffusion(direction_values=load_vals)
+                load_conf.write_into(f"load_{i}.xml")
+                
+                cmd = ["mpirun", "-np", str(self.n_cpus), self.amitex_bin, 
+                       "-nz", vtk_path.name, "-m", "mat.xml", "-a", "algo.xml", 
+                       "-c", f"load_{i}.xml", "-s", f"res_{i}"]
+                subprocess.run(cmd, cwd=work_dir)
+
+            # 5. PARSE
+            ks = []
+            for i in range(1, 4):
+                sf = work_dir / f"res_{i}.std"
+                if sf.exists():
+                    try:
+                        d = np.loadtxt(sf)
+                        ks.append(d[0] if d.ndim <= 1 else d[0,0])
+                    except: pass
+            
+            k_eff = float(np.mean(ks)) if ks else 0.0
+            with open(res_path, "w") as f:
+                f.write(f"{k_eff} 0 0\n0 {k_eff} 0\n0 0 {k_eff}\n")
+            
+            return {"Kmean": k_eff}
+            
+        except Exception as e:
+            print(f"Solver error: {e}")
         finally:
             os.chdir(prev_dir)
+        return {"Kmean": 0.0}
 
-        if res_path.is_file():
-            print(f"Successfully generated {res_path}")
-            return self._parse_results(res_path)
-
-        print(
-            f"ERROR: Amitex failed to produce {res_path}. "
-            "Check your Amitex installation and input VTK file."
-        )
-        return {"Kxx": 0.0, "Kyy": 0.0, "Kzz": 0.0, "Kmean": 0.0}
-
-    def _parse_results(self, file_path: Union[str, Path]) -> Dict[str, float]:
-        """Parse the 3x3 conductivity matrix written by Amitex.
-
-        Parameters
-        ----------
-        file_path :
-            Path to the ASCII file produced by ``printThermalCoeff``.
-        """
-        path = Path(file_path)
-        try:
-            data = np.loadtxt(path)
-            if data.size == 0:
-                return {"Kxx": 0.0, "Kyy": 0.0, "Kzz": 0.0, "Kmean": 0.0}
-
-            # Amitex outputs (at least) a 3x3 conductivity tensor.
-            matrix = np.asarray(data)[:3, :3]
-            kxx = float(matrix[0, 0])
-            kyy = float(matrix[1, 1])
-            kzz = float(matrix[2, 2])
-            kmean = float(np.trace(matrix) / 3.0)
-
-            return {"Kxx": kxx, "Kyy": kyy, "Kzz": kzz, "Kmean": kmean}
-        except Exception as e:  # pragma: no cover - defensive
-            print(f"Error parsing results from {path}: {e}")
-            return {"Kxx": 0.0, "Kyy": 0.0, "Kzz": 0.0, "Kmean": 0.0}
+    def _write_xml(self, work_dir: Path, phases: list):
+        K_val = {1: 1.0, 2: 1e-3, 3: 1.0}
+        params = []
+        with open(work_dir / "Z.txt", "w") as f: f.write("0.0\n")
+        for p in phases:
+            k = K_val.get(p, 1.0)
+            k_file = f"K_{p}.txt"
+            with open(work_dir / k_file, "w") as f: f.write(f"{k}\n")
+            px = ami_xml.Parameters_Fourier_iso(coeff_fileName=k_file, flux_fileNames=(k_file, "Z.txt", "Z.txt"), numM=p)
+            params.append(px)
+        for i, px in enumerate(params): px.numM = phases[i]
+        mat_conf = ami_xml.Material(coeff_K=1.0, list_of_param_single_mat=params)
+        mat_conf.write_into("mat.xml")
+        ami_xml.Algo_diffusion.write_into("algo.xml", convergence_criterion_value=1e-4)
