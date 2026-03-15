@@ -56,13 +56,9 @@ def worker(task_args):
     grain_radius = FIXED_GRAIN_R  # Fixed at 1.0 (normalized L_grain)
     builder = MicrostructureBuilder(L=L_DIM, n3D=N_VOX, seed=42)
     solver  = ThermalSolver(n_cpus=1)
+    pm = ProjectManager()
 
-    case_dir = OUTPUT_DIR.resolve() / f"P_{p_target:.2f}_Delta_{delta:.3f}"
-    case_dir.mkdir(parents=True, exist_ok=True)
-
-    vtk_path     = case_dir / "structure.vtk"
-    coeffs_path  = case_dir / "Coeffs.txt"
-    results_file = case_dir / "thermalCoeff_amitex.txt"
+    case_dir = OUTPUT_DIR / f"P_{p_target:.2f}_Delta_{delta:.3f}"
 
     # CORRECT PHYSICS from iter_delta_IGB_calc.py:
     # - Total porosity p_target = fixed
@@ -103,17 +99,16 @@ def worker(task_args):
     # Iterative refinement to hit p_target
     for iteration in range(12):
         try:
-            struct = builder.generate_interconnected_structure(
-                inter_radius=0.0,     # No separate inter-granular spheres
-                inter_phi=0.0,
-                intra_radius=intra_radius,
-                intra_phi=intra_phi_input,
+            # Use generate_mixed_structure: simpler, no inter-granular spheres
+            struct = builder.generate_mixed_structure(
                 grain_radius=grain_radius,
-                grain_phi=1.0,
                 delta=delta,
+                intra_pore_list=[[intra_radius, intra_phi_input]],
             )
 
-            fractions = builder.voxellate(struct, K_THERMAL, vtk_path, coeffs_path)
+            # Use pm.cd() pattern like run_distributed_porosity.py (working version)
+            with pm.cd(str(case_dir)):
+                fractions = builder.voxellate(struct, K_THERMAL)
             # Phase 0 = matrix, Phase 1 = intra pores, Phase 2 = boundary layer
             # Total porosity = phase 1 + phase 2
             phi_intra = fractions.get(1, 0.0)
@@ -152,10 +147,12 @@ def worker(task_args):
                 print(f"   Accepting p_real={p_real:.4f}")
                 break
 
-    if no_solver:
-        res = {"Kmean": 0.0}
-    else:
-        res = solver.solve(vtk_file=vtk_path, results_file=results_file)
+    # Run solver in the case directory
+    with pm.cd(str(case_dir)):
+        if no_solver:
+            res = {"Kmean": 0.0}
+        else:
+            res = solver.solve()  # Uses structure.vtk in CWD
 
     k_eff = res["Kmean"]
     print(f" [DONE] P={p_target:.2f} | delta={delta:.3f} | phi={p_real:.4f} -> K_eff={k_eff:.4f}")
