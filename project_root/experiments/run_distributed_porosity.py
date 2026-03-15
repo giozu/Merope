@@ -18,7 +18,7 @@ from core.utils import ProjectManager
 
 # --- CONFIGURAZIONE ---
 L_DIM = [10.0, 10.0, 10.0]
-N_VOX = 120 # Number of voxels per side
+N_VOX = 60 # Number of voxels per side
 
 # SPHERE_R_VALUES = [0.2, 0.4, 0.5, 0.6, 0.8] # Radii of spherical pores to test
 SPHERE_R_VALUES = [0.4, 0.6]
