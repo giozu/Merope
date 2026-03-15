@@ -20,11 +20,11 @@ from core.utils import ProjectManager
 L_DIM = [10.0, 10.0, 10.0]
 N_VOX = 60 # Number of voxels per side
 
-# SPHERE_R_VALUES = [0.2, 0.4, 0.5, 0.6, 0.8] # Radii of spherical pores to test
-SPHERE_R_VALUES = [0.4, 0.6]
+SPHERE_R_VALUES = [0.2, 0.4, 0.5, 0.6, 0.8] # Radii of spherical pores to test
+# SPHERE_R_VALUES = [0.4, 0.6]
 
 # Range of porosity to test (5% - 25%)
-PHI_VALUES = [0.05, 0.20]
+PHI_VALUES = [0.05, 0.10, 0.15, 0.20, 0.25]
 
 # Thermal properties (convention: 0 = matrix, 2 = pores)
 K_MAT = 1.0
