@@ -33,7 +33,7 @@ import sac_de_billes
 
 # --- Configuration ---
 L_DIM = [10.0, 10.0, 10.0]    # RVE size (physical units)
-N_VOX = 40  # Good resolution for grain boundaries
+N_VOX = 100  # Higher resolution for better accuracy (100^3 = 1M voxels)
 K_THERMAL = [1.0, 1.0, 1e-3]   # Phase 0=Matrix, 1=Boundary(Solid), 2=Pore
 
 # Normalized grain radius L_grain = 1.0 (adimensionalization)
