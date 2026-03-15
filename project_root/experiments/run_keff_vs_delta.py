@@ -64,66 +64,103 @@ def worker(task_args):
 
     case_dir = OUTPUT_DIR / f"P_{p_target:.2f}_Delta_{delta:.3f}"
 
-    # Phase strategy: We want THREE distinct material behaviors but Merope's
-    # generate_mixed_structure merges boundaries+pores into phase 2.
-    # Solution: Don't use generate_mixed_structure - build structure where:
-    #   Phase 1 = grains (solid matrix, K=1.0)
-    #   Phase 2 = pores (low K=1e-3)
-    # The grain boundary THICKNESS (delta) affects the porosity distribution
-    # (interconnected vs distributed) but boundaries themselves are still solid.
-    # K_THERMAL = [unused, K_solid, K_pore]
+    # Phase strategy from iter_delta_IGB_calc.py:
+    # - Create Laguerre grains with boundary layer
+    # - Create spherical pore inclusions
+    # - Overlay pores on grains: pores "win" where they exist
+    # - Final phases: 0=grains+boundaries (solid), 2=pores (low K)
+    # K_THERMAL = [K_solid, K_solid, K_pore]
 
-    # Domain size (just a list, not TypeOfVector)
+    incl_phase = 2      # Pores
+    delta_phase = 3     # Grain boundary layer (temporary)
+    grains_phase = 0    # Grain cores (solid)
+
+    # Domain size
     domain_size = L_DIM
 
-    # Initial guess: grain radius and intra porosity
-    grain_R = 1.0         # Fixed grain radius
-    grain_phi = 1.0       # Fill RVE with grains
-    intra_R = 0.15        # Intra-granular pore radius
-    intra_phi_input = p_target * 0.8  # Start aggressive
+    # Microstructure parameters
+    lagR = 1.0          # Laguerre grain size
+    lagPhi = 1.0        # Fill entire RVE with grains
+    inclR = 0.15        # Pore radius
+    inclPhi_input = p_target * 0.8  # Initial guess for pore volume fraction
 
     p_real = 0.0
 
-    # Iterative refinement to hit p_target (max 8 iterations)
+    # Iterative refinement to hit p_target
     for iteration in range(8):
         try:
-            seed = 42 + iteration  # Change seed if RSA fails
+            current_seed = 42 + iteration
 
-            # Use the builder's generate_mixed_structure method
-            structure = builder.generate_mixed_structure(
-                grain_radius=grain_R,
-                delta=delta,
-                intra_pore_list=[[intra_R, intra_phi_input]],
+            # 1. Create spherical pore inclusions (phase 2)
+            sphIncl_pores = merope.SphereInclusions_3D()
+            sphIncl_pores.setLength(domain_size)
+            sphIncl_pores.fromHisto(
+                current_seed,
+                sac_de_billes.TypeAlgo.BOOL,
+                0.0,
+                [[inclR, inclPhi_input]],
+                [incl_phase]  # Phase 2 = pores
+            )
+            multiInclusions_pores = merope.MultiInclusions_3D()
+            multiInclusions_pores.setInclusions(sphIncl_pores)
+
+            # 2. Create Laguerre tessellation for grains
+            sphIncl_grains = merope.SphereInclusions_3D()
+            sphIncl_grains.setLength(domain_size)
+            sphIncl_grains.fromHisto(
+                current_seed,
+                sac_de_billes.TypeAlgo.RSA,
+                0.0,
+                [[lagR, lagPhi]],
+                [1]  # Temporary phase for Laguerre seeds
+            )
+            polyCrystal = merope.LaguerreTess_3D(domain_size, sphIncl_grains.getSpheres())
+
+            multiInclusions_grains = merope.MultiInclusions_3D()
+            multiInclusions_grains.setInclusions(polyCrystal)
+
+            # Add grain boundary layer (phase 3) and set grain cores to phase 1
+            ids = multiInclusions_grains.getAllIdentifiers()
+            multiInclusions_grains.addLayer(ids, delta_phase, delta)  # Boundaries = phase 3
+            multiInclusions_grains.changePhase(ids, [1 for _ in ids])  # Cores = phase 1
+
+            # 3. Combine structures with remapping
+            # Following iter_delta_IGB_calc.py line 124-127:
+            # Remap both pores (2) and boundaries (3) to grains (0)
+            # But pores overlay on top, so where pores exist, they stay as pores
+            dictionnaire = {incl_phase: grains_phase, delta_phase: grains_phase}
+            structure = merope.Structure_3D(
+                multiInclusions_pores,
+                multiInclusions_grains,
+                dictionnaire
             )
 
-            # --- 6. Voxellate and extract phase fractions ---
+            # 4. Voxellate
             with pm.cd(str(case_dir)):
                 fractions = builder.voxellate(structure, K_THERMAL)
 
-            # From generate_mixed_structure: Phase 1=grains, Phase 2=boundaries+pores
-            # Since K_THERMAL=[1.0, 1.0, 1e-3], phase 2 gets K=1e-3
-            # This means boundaries are incorrectly treated as pores - known limitation!
-            phi_grains = fractions.get(1, 0.0)
-            phi_mixed = fractions.get(2, 0.0)  # boundaries + pores (both get low K - wrong!)
-            p_real = phi_mixed  # Approximate total "porous" phase
+            # Phase 0 = grains+boundaries (solid), Phase 2 = pores
+            phi_solid = fractions.get(0, 0.0)
+            phi_pores = fractions.get(2, 0.0)
+            p_real = phi_pores
 
-            print(f"   [Iter {iteration}] delta={delta:.3f}, intra_phi_in={intra_phi_input:.3f} -> grains={phi_grains:.3f}, mixed(bound+pore)={phi_mixed:.3f} (tgt={p_target:.2f})")
+            print(f"   [Iter {iteration}] delta={delta:.3f}, inclPhi_in={inclPhi_input:.3f} -> solid={phi_solid:.3f}, pores={phi_pores:.3f} (tgt={p_target:.2f})")
 
             # More tolerant convergence criterion: ±5% error acceptable
             if abs(p_real - p_target) < 0.05:
                 print(f"   ✓ Converged within 5%")
                 break
 
-            # Adjust intra_phi to hit target porosity
+            # Adjust pore volume fraction to hit target porosity
             error = p_target - p_real
-            intra_phi_input += error * 0.8  # Aggressive adjustment
-            intra_phi_input = float(np.clip(intra_phi_input, 0.01, 0.7))
+            inclPhi_input += error * 0.8  # Aggressive adjustment
+            inclPhi_input = float(np.clip(inclPhi_input, 0.01, 0.7))
 
         except RuntimeError as e:
-            # If RSA fails, reduce intra pores
-            print(f"   [Iter {iteration}] RSA error: {e}, reducing intra_phi")
-            intra_phi_input *= 0.7
-            intra_phi_input = max(0.01, intra_phi_input)
+            # If RSA/BOOL fails, reduce pore fraction
+            print(f"   [Iter {iteration}] Sphere packing error: {e}")
+            inclPhi_input *= 0.7
+            inclPhi_input = max(0.01, inclPhi_input)
             if iteration > 5:
                 print(f"   ⚠ Accepting p_real={p_real:.4f} after {iteration} iterations")
                 break
@@ -141,7 +178,7 @@ def worker(task_args):
     return {
         "Target_P":    p_target,
         "Delta":       delta,
-        "Grain_R":     grain_R,
+        "Grain_R":     lagR,
         "Real_P":      p_real,
         "K_eff":       k_eff,
     }
