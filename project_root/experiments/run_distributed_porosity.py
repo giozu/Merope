@@ -13,6 +13,11 @@ import numpy as np
 import pandas as pd
 import concurrent.futures
 
+import sys
+
+# Add parent directory to path to import core module
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from core.geometry import MicrostructureBuilder
 from core.solver import ThermalSolver
 from core.utils import ProjectManager
