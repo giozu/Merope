@@ -96,39 +96,49 @@ def compute_single_thermal_coeff(direction_i, boundaryConditions=None, zone_vtk=
         
         # Read all coefficients
         with open(coeff_fileName, 'r') as f:
-            all_coeffs = [line.strip() for line in f if line.strip()]
+            all_coeffs = [line.strip() for line in f if line.strip() and not line.startswith("#")]
         
-        num_materials = len(all_coeffs)
-        list_of_params = []
+        # [FIX] Smart lookup: Determine if this is a continuous field of coefficients 
+        # (lots of different values) or a discrete phase list.
+        # If it's a huge list of voxel-by-voxel values, Amitex uses a single Parameters_Fourier_iso
+        # that directly references the continuous coeff_file, provided the VTK reader supports it.
+        # However, if it's discrete, we create the list of params.
+        # Let's count unique values:
+        unique_coeffs = set(all_coeffs)
         
-        for m in range(1, num_materials + 1):
-            # Create a temporary file for this specific material's coefficient
-            # This ensures that Material m reads its specific value
-            m_coeff_file = f"{m}_{coeff_fileName}"
-            with open(m_coeff_file, 'w') as f:
-                f.write(all_coeffs[m-1] + "\n")
+        if len(unique_coeffs) <= 10 or len(all_coeffs) < 10:
+            # DISCRETE MODE (Few Unique Coefficients, probably Phase IDs matching file lines)
+            num_materials = len(all_coeffs)
+            list_of_params = []
+            print(f"Discrete Material Mode: Found {num_materials} phases in {coeff_fileName}")
             
-            # We also need specialized flux files if they depend on the material
-            # But here we can reuse the ones from set_direction if they are compatible
-            # Actually, set_direction creates files. We should do the same for flux.
-            m_flux_files = []
-            for f_in in flux_fileNames:
-                # f_in is either coeff_fileName or 0_coeff_fileName
-                if f_in == coeff_fileName:
-                    m_flux_files.append(m_coeff_file)
-                else:
-                    # Create a zero-file for this material
-                    m_zero_file = f"0_{m}_{coeff_fileName}"
-                    with open(m_zero_file, 'w') as f:
-                        f.write("0.0\n")
-                    m_flux_files.append(m_zero_file)
+            for m in range(1, num_materials + 1):
+                # Create a temporary file for this specific material's coefficient
+                m_coeff_file = f"{m}_{coeff_fileName}"
+                with open(m_coeff_file, 'w') as f:
+                    f.write(all_coeffs[m-1] + "\n")
+                
+                m_flux_files = []
+                for f_in in flux_fileNames:
+                    if f_in == coeff_fileName:
+                        m_flux_files.append(m_coeff_file)
+                    else:
+                        m_zero_file = f"0_{m}_{coeff_fileName}"
+                        with open(m_zero_file, 'w') as f: f.write("0.0\n")
+                        m_flux_files.append(m_zero_file)
 
-            param_Fourier = ami_xml.Parameters_Fourier_iso(
-                coeff_fileName=m_coeff_file,
-                flux_fileNames=m_flux_files,
-                numM=m
-            )
-            list_of_params.append(param_Fourier)
+                param_Fourier = ami_xml.Parameters_Fourier_iso(
+                    coeff_fileName=m_coeff_file,
+                    flux_fileNames=m_flux_files,
+                    numM=m
+                )
+                list_of_params.append(param_Fourier)
+        else:
+            # CONTINUOUS MODE (Many Unique Coefficients / Voxel-by-voxel)
+            # Amitex supports continuous coefficient mapping using a SINGLE generic parameter configuration.
+            print(f"Continuous Material Mode: Identified {len(unique_coeffs)} unique coeffs. across {len(all_coeffs)} entries.")
+            list_of_params = [ami_xml.Parameters_Fourier_iso(coeff_fileName=coeff_fileName,
+                                                            flux_fileNames=flux_fileNames)]
             
         mat = ami_xml.Material(coeff_K=coeff_K, list_of_param_single_mat=list_of_params)
         mat.write_into(mat_xml)
