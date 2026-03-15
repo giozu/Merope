@@ -182,7 +182,7 @@ class MicrostructureBuilder:
         sph.setLength(self.L)
         sph.fromHisto(
             self.seed,
-            sac_de_billes.TypeAlgo.RSA,
+            sac_de_billes.TypeAlgo.BOOL,
             0.0,
             [[float(r), float(phi)] for r, phi in radii_phi_list],
             [int(phase_id)] * len(radii_phi_list),
@@ -296,80 +296,163 @@ class MicrostructureBuilder:
         grain_phi: float,
         delta: float,
     ) -> "merope.Structure_3D":
-        """Generate interconnected structure matching MOX_structure_generator logic."""
-        import sac_de_billes
-        import merope
+        """Build a full inter+intra porous polycrystal (legacy-equivalent).
 
-        np.random.seed(self.seed)
+        This method is the object-oriented counterpart of the geometry
+        pipeline implemented in
+        ``tests/exercises/inco_intra_inter_polycrystal.build_and_voxelize``
+        and, in refactored form, in
+        ``tests/refactoring/merope_engine.MeropeEngine.build_interconnected_structure``.
+
+        Geometry
+        --------
+        1. Inter-granular pores (phase 2) as an independent `MultiInclusions_3D`.
+        2. Intra-granular pores (phase 1) as another independent
+           `MultiInclusions_3D`.
+        3. Laguerre grains built from RSA seeds, with a boundary layer
+           (phase 3) of physical thickness ``delta``.
+        4. Combination:
+
+           - First, inter-pores + grains are merged, remapping both
+             inter-pores (2) and boundary (3) to grains (0).
+           - Then intra-pores are overlaid, with a remap that converts the
+             grain phase (0) into the pore phase (2) wherever intra-pores
+             are active.
+
+        Phase conventions
+        -----------------
+        To stay fully consistent with the legacy scripts, this method
+        adopts the *old* phase convention:
+
+        - 0 → matrix (solid grains, including boundary film),
+        - 1 → temporary intra-pore tag,
+        - 2 → final pore phase (used to compute porosity and to assign `K_gas`),
+        - 3 → temporary grain-boundary layer before remapping.
+
+        You should therefore pass thermal conductivities as::
+
+            K = [K_matrix, K_matrix, K_gas]
+
+        when voxelizing the returned structure.
+
+        Parameters
+        ----------
+        inter_radius :
+            Sphere radius for inter-granular pores.
+        inter_phi :
+            Target volume fraction of inter-granular porosity (0 ≤ φ ≤ 1).
+        intra_radius :
+            Sphere radius for intra-granular pores.
+        intra_phi :
+            Target volume fraction of intra-granular porosity (0 ≤ φ ≤ 1).
+        grain_radius :
+            Radius parameter for the Laguerre seeds.
+        grain_phi :
+            Target “packing” volume fraction for the Laguerre seeds (typically 1.0
+            to fill the RVE with grains).
+        delta :
+            Physical thickness of the grain-boundary layer.
+
+        Returns
+        -------
+        merope.Structure_3D
+            A structure where pores (both inter- and intra-granular) are in
+            phase 2, and the solid matrix is in phase 0, matching the
+            original Mérope/Amitex scripts.
+
+        Raises
+        ------
+        ValueError
+            If any radius is non-positive, any porosity is outside [0, 1],
+            or ``delta`` is negative.
+        """
+        if inter_radius <= 0.0:
+            raise ValueError(f"inter_radius must be positive, got {inter_radius}")
+        if intra_radius <= 0.0:
+            raise ValueError(f"intra_radius must be positive, got {intra_radius}")
+        if grain_radius <= 0.0:
+            raise ValueError(f"grain_radius must be positive, got {grain_radius}")
+        if not (0.0 <= inter_phi <= 1.0):
+            raise ValueError(f"inter_phi must be in [0, 1], got {inter_phi}")
+        if not (0.0 <= intra_phi <= 1.0):
+            raise ValueError(f"intra_phi must be in [0, 1], got {intra_phi}")
+        if not (0.0 < grain_phi <= 1.0):
+            raise ValueError(f"grain_phi must be in (0, 1], got {grain_phi}")
+        if delta < 0.0:
+            raise ValueError(f"delta must be non-negative, got {delta}")
+
         L = self.L
 
-        phase_matrix = 0
-        phase_intra = 1  # Red spheres
-        phase_inter = 2  # Blue boundary network
+        # Legacy-compatible phase indices
+        phase_grains = 0
+        phase_intra = 1
+        phase_inter = 2
+        phase_boundary = 3
 
-        # -----------------------------------------------------------------
-        # 1) Generate identical grains for Base and Mask
-        # -----------------------------------------------------------------
-        # Base laguerre: Core = 0 (white matrix), Boundary = 2 (blue inter-pores)
-        sph_lag = merope.SphereInclusions_3D()
-        sph_lag.setLength(L)
-        sph_lag.fromHisto(
-            int(self.seed + 2), sac_de_billes.TypeAlgo.RSA, 0.0, [[float(grain_radius), float(grain_phi)]], [0]
-        )
-        spheres = sph_lag.getSpheres()
+        # 1) Inter-granular pores ----------------------------------------
+        sph_inter = merope.SphereInclusions_3D()
+        sph_inter.setLength(L)
+        if inter_phi > 0.0:
+            sph_inter.fromHisto(
+                int(self.seed),
+                sac_de_billes.TypeAlgo.BOOL,
+                0.0,
+                [[float(inter_radius), float(inter_phi)]],
+                [phase_inter],
+            )
+        inter_pores = merope.MultiInclusions_3D()
+        inter_pores.setInclusions(sph_inter)
 
-        tess_base = merope.LaguerreTess_3D(L, spheres)
-        grains_base = merope.MultiInclusions_3D()
-        grains_base.setInclusions(tess_base)
-        ids = grains_base.getAllIdentifiers()
-        grains_base.addLayer(ids, phase_inter, float(delta))  # outer layer = 2
-        grains_base.changePhase(ids, [phase_matrix for _ in ids])  # core = 0
-        struct_base = merope.Structure_3D(grains_base)
-
-        # Mask laguerre: Core = 0, Boundary = 1 (Activating mask)
-        tess_mask = merope.LaguerreTess_3D(L, spheres)
-        grains_mask = merope.MultiInclusions_3D()
-        grains_mask.setInclusions(tess_mask)
-        ids_m = grains_mask.getAllIdentifiers()
-        grains_mask.addLayer(ids_m, 1, float(delta))  # outer layer = 1
-        grains_mask.changePhase(ids_m, [phase_matrix for _ in ids_m])  # core = 0
-        struct_mask = merope.Structure_3D(grains_mask)
-
-        # -----------------------------------------------------------------
-        # 2) Generate Intra-granular pores (Red spheres, phase 1)
-        # -----------------------------------------------------------------
+        # 2) Intra-granular pores ----------------------------------------
         sph_intra = merope.SphereInclusions_3D()
         sph_intra.setLength(L)
         if intra_phi > 0.0:
             sph_intra.fromHisto(
-                int(self.seed + 1),
+                int(self.seed),
                 sac_de_billes.TypeAlgo.BOOL,
                 0.0,
                 [[float(intra_radius), float(intra_phi)]],
                 [phase_intra],
             )
-        m_intra = merope.MultiInclusions_3D()
-        m_intra.setInclusions(sph_intra)
-        struct_intra = merope.Structure_3D(m_intra)
+        intra_pores = merope.MultiInclusions_3D()
+        intra_pores.setInclusions(sph_intra)
 
-        # -----------------------------------------------------------------
-        # 3) Restrict intra-pores to grain interiors
-        # -----------------------------------------------------------------
-        # Where struct_mask == 1 (the boundary network), map intra (1) -> matrix (0)
-        # This deletes all intra-pores that touch or overlap the inter-pore boundary,
-        # ensuring they stay strictly inside the grain cores.
-        struct_intra_restricted = merope.Structure_3D(
-            struct_intra, struct_mask, {phase_intra: phase_matrix}
+        # 3) Laguerre grains + boundary layer ----------------------------
+        sph_lag = merope.SphereInclusions_3D()
+        sph_lag.setLength(L)
+        sph_lag.fromHisto(
+            int(self.seed),
+            sac_de_billes.TypeAlgo.RSA,
+            0.0,
+            [[float(grain_radius), float(grain_phi)]],
+            [1],  # temporary IDs for seeds
         )
 
-        # -----------------------------------------------------------------
-        # 4) Composite final image
-        # -----------------------------------------------------------------
-        # Now struct_intra_restricted has Phase 1 strictly inside the cores.
-        # We overlay this onto the base (which has 0 and 2).
-        # Where intra is 1, we replace matrix (0) with intra (1).
+        tess = merope.LaguerreTess_3D(L, sph_lag.getSpheres())
+        grains = merope.MultiInclusions_3D()
+        grains.setInclusions(tess)
+
+        ids = grains.getAllIdentifiers()
+        grains.addLayer(ids, phase_boundary, float(delta))
+        grains.changePhase(ids, [1 for _ in ids])  # temporary, see mapping below
+
+        # 4) Merge inter-pores + grains ----------------------------------
+        map_inter_boundary_to_grains = {
+            phase_inter: phase_grains,
+            phase_boundary: phase_grains,
+        }
+        struct_inter_on_grains = merope.Structure_3D(
+            inter_pores,
+            grains,
+            map_inter_boundary_to_grains,
+        )
+
+        # 5) Overlay intra-pores, force grains (0) → pores (2) where intra act
+        final_overlay_remap = {phase_grains: phase_inter}
         final_struct = merope.Structure_3D(
-            struct_base, struct_intra_restricted, {phase_matrix: phase_intra}
+            struct_inter_on_grains,
+            intra_pores,
+            final_overlay_remap,
         )
 
         return final_struct
@@ -434,11 +517,7 @@ class MicrostructureBuilder:
         except Exception as e:  # pragma: no cover - defensive logging only
             print(f"Analyzer skipped due to: {e}")
 
-        # Get all phases present in the structure
-        all_phases = structure.getAllPhases()
-
         # Apply thermal coefficients (bakes the phases into the grid).
-        # Simply pass K_values directly - Merope will map them to phases internally
         grid_repr.apply_homogRule(merope.HomogenizationRule.Voigt, list(K_values))
 
         # Export for Amitex
