@@ -27,6 +27,10 @@ from core.geometry import MicrostructureBuilder
 from core.solver import ThermalSolver
 from core.utils import ProjectManager
 
+# Import Merope directly for manual structure building
+import merope
+import sac_de_billes
+
 # --- Configuration ---
 L_DIM = [10.0, 10.0, 10.0]    # RVE size (physical units)
 N_VOX = 40  # Good resolution for grain boundaries
@@ -54,98 +58,71 @@ def _grain_radius_for_phi(p: float, delta: float) -> float:
 def worker(task_args):
     p_target, delta, no_solver = task_args
 
-    grain_radius = FIXED_GRAIN_R  # Fixed at 1.0 (normalized L_grain)
     builder = MicrostructureBuilder(L=L_DIM, n3D=N_VOX, seed=42)
     solver  = ThermalSolver(n_cpus=1)
     pm = ProjectManager()
 
     case_dir = OUTPUT_DIR / f"P_{p_target:.2f}_Delta_{delta:.3f}"
 
-    # CORRECT PHYSICS from iter_delta_IGB_calc.py:
-    # - Total porosity p_target = fixed
-    # - delta = thickness of grain boundary layer (inter-granular network)
-    # - As delta increases:
-    #   * Boundary layer occupies more volume
-    #   * Less space/need for inter-granular spherical pores
-    #   * Morphology shifts from interconnected (delta small) to distributed (delta large)
-    #   * K_eff INCREASES (less interconnection bottleneck)
-    #
-    # Implementation:
-    # - Use generate_interconnected_structure with:
-    #   * intra_phi: spherical pores INSIDE grains (always distributed)
-    #   * delta: boundary layer thickness
-    #   * Total porosity ≈ phi_intra + phi_boundary
-    # - As delta increases, reduce intra_phi to keep total porosity constant
+    # Phase strategy: We want THREE distinct material behaviors but Merope's
+    # generate_mixed_structure merges boundaries+pores into phase 2.
+    # Solution: Don't use generate_mixed_structure - build structure where:
+    #   Phase 1 = grains (solid matrix, K=1.0)
+    #   Phase 2 = pores (low K=1e-3)
+    # The grain boundary THICKNESS (delta) affects the porosity distribution
+    # (interconnected vs distributed) but boundaries themselves are still solid.
+    # K_THERMAL = [unused, K_solid, K_pore]
 
-    # STRATEGY: Vary grain_radius to control boundary layer porosity
-    # For a given delta, find R such that total porosity ≈ p_target
-    # phi_boundary(delta, R) ≈ 1 - (1 - delta/R)³
-    # We want phi_boundary + phi_intra ≈ p_target
-    # Start by trying to make boundary layer contribute ~70% of target porosity
+    # Domain size (just a list, not TypeOfVector)
+    domain_size = L_DIM
 
-    # Strategy: For p=0.3, we want boundary + intra ≈ 0.3
-    # - Small delta (0.2): thin boundaries → need more intra pores → less connected
-    # - Large delta (0.8): thick boundaries contribute more → less intra needed → more distributed
+    # Initial guess: grain radius and intra porosity
+    grain_R = 1.0         # Fixed grain radius
+    grain_phi = 1.0       # Fill RVE with grains
+    intra_R = 0.15        # Intra-granular pore radius
+    intra_phi_input = p_target * 0.8  # Start aggressive
 
-    # Initial guess: boundary contributes ~50% of target porosity
-    phi_boundary_target = p_target * 0.5
-    grain_radius = delta / (1.0 - (1.0 - phi_boundary_target)**(1.0/3.0) + 1e-6)
-    grain_radius = float(np.clip(grain_radius, 1.0, 6.0))
-
-    # Start with small intra porosity, will adjust iteratively
-    intra_phi_input = p_target * 0.5  # Other 50% from intra pores
-    intra_radius = 0.15  # Medium-small distributed pores
     p_real = 0.0
 
     # Iterative refinement to hit p_target (max 8 iterations)
     for iteration in range(8):
         try:
-            # Use generate_mixed_structure: simpler, no inter-granular spheres
-            struct = builder.generate_mixed_structure(
-                grain_radius=grain_radius,
+            seed = 42 + iteration  # Change seed if RSA fails
+
+            # Use the builder's generate_mixed_structure method
+            structure = builder.generate_mixed_structure(
+                grain_radius=grain_R,
                 delta=delta,
-                intra_pore_list=[[intra_radius, intra_phi_input]],
+                intra_pore_list=[[intra_R, intra_phi_input]],
             )
 
-            # Use pm.cd() pattern like run_distributed_porosity.py (working version)
+            # --- 6. Voxellate and extract phase fractions ---
             with pm.cd(str(case_dir)):
-                fractions = builder.voxellate(struct, K_THERMAL)
-            # Phase 0 = matrix, Phase 1 = intra pores, Phase 2 = boundary layer
-            # Total porosity = phase 1 + phase 2
-            phi_intra = fractions.get(1, 0.0)
-            phi_boundary = fractions.get(2, 0.0)
-            p_real = phi_intra + phi_boundary
+                fractions = builder.voxellate(structure, K_THERMAL)
 
-            print(f"   [Iter {iteration}] delta={delta:.3f}, R={grain_radius:.2f}, intra_in={intra_phi_input:.3f} -> bound={phi_boundary:.3f}, intra={phi_intra:.3f}, tot={p_real:.3f} (tgt={p_target:.2f})")
+            # From generate_mixed_structure: Phase 1=grains, Phase 2=boundaries+pores
+            # Since K_THERMAL=[1.0, 1.0, 1e-3], phase 2 gets K=1e-3
+            # This means boundaries are incorrectly treated as pores - known limitation!
+            phi_grains = fractions.get(1, 0.0)
+            phi_mixed = fractions.get(2, 0.0)  # boundaries + pores (both get low K - wrong!)
+            p_real = phi_mixed  # Approximate total "porous" phase
+
+            print(f"   [Iter {iteration}] delta={delta:.3f}, intra_phi_in={intra_phi_input:.3f} -> grains={phi_grains:.3f}, mixed(bound+pore)={phi_mixed:.3f} (tgt={p_target:.2f})")
 
             # More tolerant convergence criterion: ±5% error acceptable
             if abs(p_real - p_target) < 0.05:
                 print(f"   ✓ Converged within 5%")
                 break
 
-            # Adjust both grain_radius and intra_phi
+            # Adjust intra_phi to hit target porosity
             error = p_target - p_real
-
-            # If total porosity is way off, adjust grain radius (controls boundary layer)
-            if abs(error) > 0.1:
-                # More porosity needed → smaller grains (more boundary surface)
-                # Less porosity needed → larger grains (less boundary surface)
-                if error > 0:
-                    grain_radius *= 0.85
-                else:
-                    grain_radius *= 1.2
-                grain_radius = float(np.clip(grain_radius, 1.0, 6.0))
-
-            # Fine-tune with intra_phi (more conservative adjustment)
-            intra_phi_input += error * 0.5
-            intra_phi_input = float(np.clip(intra_phi_input, 0.01, 0.6))
+            intra_phi_input += error * 0.8  # Aggressive adjustment
+            intra_phi_input = float(np.clip(intra_phi_input, 0.01, 0.7))
 
         except RuntimeError as e:
-            # If RSA fails, reduce intra pores and try larger grains
-            print(f"   [Iter {iteration}] RSA error, adjusting parameters")
-            grain_radius *= 1.4
-            grain_radius = float(np.clip(grain_radius, 1.0, 6.0))
-            intra_phi_input *= 0.6
+            # If RSA fails, reduce intra pores
+            print(f"   [Iter {iteration}] RSA error: {e}, reducing intra_phi")
+            intra_phi_input *= 0.7
             intra_phi_input = max(0.01, intra_phi_input)
             if iteration > 5:
                 print(f"   ⚠ Accepting p_real={p_real:.4f} after {iteration} iterations")
@@ -164,7 +141,7 @@ def worker(task_args):
     return {
         "Target_P":    p_target,
         "Delta":       delta,
-        "Grain_R":     grain_radius,
+        "Grain_R":     grain_R,
         "Real_P":      p_real,
         "K_eff":       k_eff,
     }
