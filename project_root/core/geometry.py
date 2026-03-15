@@ -437,27 +437,9 @@ class MicrostructureBuilder:
         # Get all phases present in the structure
         all_phases = structure.getAllPhases()
 
-        # Build coefficient array: map each phase ID to the appropriate K value
-        # Following the pattern from tests/microstructures/buildVoxellation/buildVoxellation.py:78
-        # All sphere phases (ID > 2) should map to the pore conductivity K_values[2]
-        # Phase 0 = matrix → K_values[0]
-        # Phase 1 = unused → K_values[1] if exists, else K_values[0]
-        # Phase 2+ = pores/spheres → K_values[2] if exists, else K_values[-1]
-
-        pureCoeffs = []
-        for phase_id in all_phases:
-            if phase_id == 0:
-                # Matrix phase
-                pureCoeffs.append(K_values[0])
-            elif phase_id == 1:
-                # Unused intermediate phase
-                pureCoeffs.append(K_values[1] if len(K_values) > 1 else K_values[0])
-            else:
-                # All pore/sphere phases (2, 3, 4, ..., N) get pore conductivity
-                pureCoeffs.append(K_values[2] if len(K_values) > 2 else K_values[-1])
-
         # Apply thermal coefficients (bakes the phases into the grid).
-        grid_repr.apply_homogRule(merope.HomogenizationRule.Voigt, pureCoeffs)
+        # Simply pass K_values directly - Merope will map them to phases internally
+        grid_repr.apply_homogRule(merope.HomogenizationRule.Voigt, list(K_values))
 
         # Export for Amitex
         printer = merope.vox.vtk_printer_3D()
