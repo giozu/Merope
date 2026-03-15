@@ -50,18 +50,18 @@ except ImportError as _import_err:
 # CONFIGURATION – edit here
 # =============================================================================
 L_DIM   = [15.0, 15.0, 15.0]    # RVE size [μm] (cubic). Increased to 15 to ensure L_RVE/R_pore > 20
-N_VOX_BASE = 120                # Starting voxels per side
+N_VOX_BASE = 80                 # Starting voxels per side
 SEED    = 42
 
 # Adaptive Resolution Settings
 ADAPTIVE_VOX   = True
 MAX_ERROR_PERC = 1.0            # Strict 1% error tolerance
-MAX_N_VOX      = 270            # Maximum allowed N_VOX
+MAX_N_VOX      = 100            # Maximum allowed N_VOX
 N_VOX_STEP     = 30             # How much to increase N_VOX each time
 
 # Sphere radius / porosity sweep
 SPHERE_R  = 0.5                          # pore radius [same units as L_DIM]
-PHI_VALUES = np.linspace(0.10, 0.20, 2)  # porosity range to simulate
+PHI_VALUES = np.linspace(0.10, 0.20, 1)  # porosity range to simulate
 
 # Thermal properties
 K_MAT  = 1.0    # matrix conductivity  [W/m·K]  (normalised to 1)
@@ -204,80 +204,62 @@ def worker(task_args):
         ratio_LR = L_RVE / float(SPHERE_R)
         ratio_Rlvox = float(SPHERE_R) / L_voxel
 
-        case_dir = output_dir.resolve() / f"Phi_{phi_target:.4f}_Nvox_{current_n_vox}"
+        case_dir = output_dir / f"Phi_{phi_target:.4f}_Nvox_{current_n_vox}"
         case_dir.mkdir(parents=True, exist_ok=True)
-        abs_case_dir = str(case_dir)
-        
-        try:
-            # 1. Voxelization: build grid, apply homogenization, and write VTK for Amitex
-            grid_params = merope.vox.create_grid_parameters_N_L_3D(
-                [current_n_vox, current_n_vox, current_n_vox], L_DIM
-            )
-            grid = merope.vox.GridRepresentation_3D(
-                struct, grid_params, merope.vox.VoxelRule.Average
-            )
-            analyzer = merope.vox.GridAnalyzer_3D()
-            fractions = analyzer.compute_percentages(grid)
-            phi_real = fractions.get(2, 0.0)
 
-            # Bake thermal coefficients into the grid before printing
-            grid.apply_homogRule(merope.HomogenizationRule.Voigt, K_THERMAL)
+        with pm.cd(str(case_dir)):
+            try:
+                # Use builder.voxellate() which handles VTK generation correctly
+                fractions = builder.voxellate(struct, K_THERMAL)
+                phi_real = fractions.get(2, 0.0)
 
-            printer = merope.vox.vtk_printer_3D()
-            printer.printVTK_segmented(
-                grid,
-                str(case_dir / "structure.vtk"),
-                str(case_dir / "Coeffs.txt"),
-                nameValue="MaterialId",
-            )
+                # AMITEX Solver (uses CWD for structure.vtk)
+                if no_solver:
+                    res = {"Kmean": 0.0}
+                else:
+                    res = solver.solve()
 
-            # 2. AMITEX Solver (internally handles chdir safely)
-            if no_solver:
-                res = {"Kmean": 0.0}
-            else:
-                res = solver.solve(vtk_file=os.path.join(abs_case_dir, "structure.vtk"))
+                k_eff = res["Kmean"]
+                k_maxw = float(maxwell_eucken(np.array([phi_real]), K_MAT, K_PORE)[0])
+                k_loeb = float(loeb(np.array([phi_real]), K_MAT)[0])
 
-            k_eff = res["Kmean"]
-            k_maxw = float(maxwell_eucken(np.array([phi_real]), K_MAT, K_PORE)[0])
-            k_loeb = float(loeb(np.array([phi_real]), K_MAT)[0])
-            
-            error_perc = abs(k_eff - k_loeb) / k_loeb * 100.0 if k_loeb > 0 else 0.0
+                error_perc = abs(k_eff - k_loeb) / k_loeb * 100.0 if k_loeb > 0 else 0.0
 
-            # If Amitex failed to produce a meaningful conductivity (Kmean=0 with pores present),
-            # treat this run as invalid rather than as a "perfect insulator".
-            if (not no_solver) and (phi_real > 0.0) and (k_eff == 0.0):
+                # If Amitex failed to produce a meaningful conductivity (Kmean=0 with pores present),
+                # treat this run as invalid rather than as a "perfect insulator".
+                if (not no_solver) and (phi_real > 0.0) and (k_eff == 0.0):
+                    print(
+                        "   [ERROR] Amitex returned Kmean=0.0 with non-zero porosity; "
+                        "marking this case as invalid."
+                    )
+                    return None
+
                 print(
-                    "   [ERROR] Amitex returned Kmean=0.0 with non-zero porosity; "
-                    "marking this case as invalid."
+                    f"   [DONE N={current_n_vox}] φ_target={phi_target:.3f} | φ_real={phi_real:.4f} | R/l_vox={ratio_Rlvox:.2f} | "
+                    f"K_sim={k_eff:.4f} | Err={error_perc:.2f}%"
                 )
+
+                if ADAPTIVE_VOX and error_perc > MAX_ERROR_PERC and current_n_vox < MAX_N_VOX:
+                    current_n_vox += N_VOX_STEP
+                    if current_n_vox > MAX_N_VOX:
+                        current_n_vox = MAX_N_VOX
+                    print(f"   [!] Phi={phi_target:.3f}: Error {error_perc:.2f}% > {MAX_ERROR_PERC}%. Retrying with N_VOX = {current_n_vox}...")
+                    continue
+
+                return {
+                    "Phi_Target":  phi_target,
+                    "Phi_Real":    phi_real,
+                    "K_mean":      k_eff,
+                    "K_Maxwell":   k_maxw,
+                    "K_Loeb":      k_loeb,
+                    "Error_Perc":  error_perc,
+                    "Ratio_LR":    ratio_LR,
+                    "Ratio_Rlvox": ratio_Rlvox,
+                    "N_Vox":       current_n_vox
+                }
+            except Exception as e:
+                print(f"Error during Phi={phi_target} N_Vox={current_n_vox}: {e}")
                 return None
-                
-            print(
-                f"   [DONE N={current_n_vox}] φ_target={phi_target:.3f} | φ_real={phi_real:.4f} | R/l_vox={ratio_Rlvox:.2f} | "
-                f"K_sim={k_eff:.4f} | Err={error_perc:.2f}%"
-            )
-            
-            if ADAPTIVE_VOX and error_perc > MAX_ERROR_PERC and current_n_vox < MAX_N_VOX:
-                current_n_vox += N_VOX_STEP
-                if current_n_vox > MAX_N_VOX:
-                    current_n_vox = MAX_N_VOX
-                print(f"   [!] Phi={phi_target:.3f}: Error {error_perc:.2f}% > {MAX_ERROR_PERC}%. Retrying with N_VOX = {current_n_vox}...")
-                continue
-            
-            return {
-                "Phi_Target":  phi_target,
-                "Phi_Real":    phi_real,
-                "K_mean":      k_eff,
-                "K_Maxwell":   k_maxw,
-                "K_Loeb":      k_loeb,
-                "Error_Perc":  error_perc,
-                "Ratio_LR":    ratio_LR,
-                "Ratio_Rlvox": ratio_Rlvox,
-                "N_Vox":       current_n_vox
-            }
-        except Exception as e:
-            print(f"Error during Phi={phi_target} N_Vox={current_n_vox}: {e}")
-            return None
 
 
 def run_simulations(output_dir: Path, no_solver: bool = False) -> pd.DataFrame:

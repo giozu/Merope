@@ -15,3 +15,5 @@ DeltaScan_Results
 Distributed_Test
 Geometry_Scan
 modules/pybind11
+result_folder/
+test_voxel/

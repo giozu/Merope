@@ -183,6 +183,7 @@ def _build_and_score_distributed(
         radii_phi_list.append([float(small_radius), float(phi_small)])
 
     try:
+        # Generate distributed pore structure (no polycrystal base)
         multi = builder.generate_spheres(radii_phi_list, phase_id=2)
         struct = merope.Structure_3D(multi)
 
@@ -205,19 +206,32 @@ def _build_and_score_distributed(
         err = abs(phi_real - target_porosity) / max(target_porosity, 1e-6)
         por_fitness = max(0.0, 1.0 - err)
 
+        # Apply homogRule (required before VTK export)
         grid.apply_homogRule(merope.HomogenizationRule.Voigt, list(K_THERMAL))
+
+        # Write VTK using printVTK_segmented (will generate fragmented Coeffs)
+        # We'll unify them afterward
+        printer = merope.vox.vtk_printer_3D()
+        vtk_path = os.path.join(fixed["work_dir"], "structure.vtk")
+        coeffs_path = os.path.join(fixed["work_dir"], "Coeffs.txt")
+
+        printer.printVTK_segmented(grid, vtk_path, coeffs_path, nameValue="MaterialId")
+
+        # Unify fragmented Coeffs files (Merope creates 0_*_Coeffs.txt)
+        # Replace them with a simple 3-line file for phases 0, 1, 2
+        import glob
+        frag_files = sorted(glob.glob(os.path.join(fixed["work_dir"], "0_*_Coeffs.txt")))
+        for f in frag_files:
+            os.remove(f)
+
+        with open(coeffs_path, 'w') as f:
+            for k in K_THERMAL:
+                f.write(f"{k}\n")
+
+        # Extract array for morphology analysis
         conv = merope.vox.NumpyConverter_3D()
         array3d = conv.compute_RealField(grid).reshape(
             (builder.n3D,) * 3, order='C'
-        )
-
-        # Also write VTK for Amitex (in work_dir)
-        printer = merope.vox.vtk_printer_3D()
-        printer.printVTK_segmented(
-            grid, 
-            os.path.join(fixed["work_dir"], "structure.vtk"), 
-            os.path.join(fixed["work_dir"], "Coeffs.txt"), 
-            nameValue="MaterialId"
         )
 
         slices_dir = os.path.join(fixed["work_dir"], "tmp_slices")
