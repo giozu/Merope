@@ -505,7 +505,7 @@ class MicrostructureBuilder:
         coeffs_path.parent.mkdir(parents=True, exist_ok=True)
 
         grid_repr = merope.vox.GridRepresentation_3D(
-            structure, self.grid_params, merope.vox.VoxelRule.Center
+            structure, self.grid_params, merope.vox.VoxelRule.Average
         )
 
         # SAFE ANALYZER LOGIC

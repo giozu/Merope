@@ -11,12 +11,6 @@ if str(_PROJECT_ROOT) not in sys.path:
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import concurrent.futures
-
-import sys
-
-# Add parent directory to path to import core module
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.geometry import MicrostructureBuilder
 from core.solver import ThermalSolver
@@ -126,17 +120,26 @@ def main() -> None:
     # --- SIMULATION MODE (standard) ---
     else:
         pm = ProjectManager()
+        builder = MicrostructureBuilder(L=L_DIM, n3D=N_VOX, seed=42)
+        solver = ThermalSolver(n_cpus=4)
+
         pm.cleanup_folder(str(output_dir))
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        print("=== VALIDATION OF DISTRIBUTED POROSITY (SPHERES ONLY, PARALLEL) ===")
-        tasks = [(r, p, output_dir, args.no_solver) for r in SPHERE_R_VALUES for p in PHI_VALUES]
+        results_list = []
 
-        # ProcessPoolExecutor scales well across heavy independent solvers
-        with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
-            raw_results = list(executor.map(worker, tasks))
+        print("=== VALIDATION OF DISTRIBUTED POROSITY (SPHERES ONLY) ===")
 
-        results_list = [r for r in raw_results if r is not None]
+        for r_sphere in SPHERE_R_VALUES:
+            print(f"\n# === Simulating Sphere Radius: {r_sphere} ===")
+
+            for phi_target in PHI_VALUES:
+                print(f"\n--- Simulating Sphere Porosity: {phi_target * 100:.1f}% (R={r_sphere}) ---")
+
+                # Run the worker logic directly (no parallelism)
+                result = worker((r_sphere, phi_target, output_dir, args.no_solver))
+                if result is not None:
+                    results_list.append(result)
 
         # --- SAVE RESULTS ---
         if not results_list:
