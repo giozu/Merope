@@ -101,6 +101,24 @@ Gli script in `test_por/` sono utilizzati per studiare la conducibilità termica
 
 K_eff cala quasi linearmente con la porosità — caso classico di inclusioni sferiche distribuite (confrontabile con Maxwell-Garnett).
 
+### `mixed_Intra_inter_calc.py`
+**Sweep 2D sistematico** — il modello di microstruttura più completo tra gli script in `test_por/`.
+
+**Cosa fa:**
+- Sweep su 10 valori di `inclPhi` (0.02→0.20) × 10 valori di `incl2Phi` (0.01→0.031) = **100 run Amitex**
+- Separa esplicitamente **inter-granular pores** (sfere BOOL, R=0.3, `inclPhi`) e **intra-granular pores** (sfere RSA, R=0.05, `incl2Phi`)
+- Doppio overlay:
+  1. `{2:0, 3:0}`: confina i pori inter nei grain boundaries
+  2. `{0:2}`: distribuisce i pori intra dentro i grani
+- delta=3, lagR=3 (fissi), L=10, n3D=100
+
+**Perché è il più rappresentativo:**
+- Unico script che fa uno **sweep parametrico separato** su inter e intra porosity
+- Permette di isolare l'effetto di ciascuna popolazione di pori su K_eff
+- Stesso pattern di overlay di `2_rad_mixed_gen.py` ma con esplorazione sistematica dello spazio dei parametri
+
+**Limiti:** delta è fisso (=lagR), quindi non studia l'effetto della morfologia interconnessa vs distribuita. Per quello serve combinare con lo sweep su delta di `iter_delta_IGB_calc.py`.
+
 ### `Gauss_multi_rad_gen.py`
 Come `2_rad_mixed_gen.py` ma con **distribuzione gaussiana** dei raggi per i pori intra-granulari (N(0.3, 0.13), 5 popolazioni). n3D=300, delta=0.003. ThermalAmitex ora decommentato.
 
