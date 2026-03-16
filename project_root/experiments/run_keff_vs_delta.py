@@ -40,10 +40,10 @@ K_THERMAL = [1.0, 1.0, 1e-3]   # Phase 0=Matrix, 1=Boundary(Solid), 2=Pore
 # This makes delta a relative parameter: delta/L_grain ∈ [0, 1]
 FIXED_GRAIN_R = 1.0
 
-# Delta values: 0 → interconnected cracks, 1 → distributed (full grain size)
-# Focus on the transition: delta=0.2 (low K) vs delta=0.8 (high K)
-DELTA_VALUES = [0.2, 0.8]  # See the K_eff transition clearly
-P_TARGETS    = [0.30]  # Fixed porosity to match green curve in reference plot
+# Delta values: scan from 0.1 to 0.9 to capture full crack-to-sphere transition
+DELTA_VALUES = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+# Porosity targets: three curves like in the reference plot
+P_TARGETS    = [0.1, 0.2, 0.3]
 OUTPUT_DIR   = Path("Results_Keff_vs_Delta")
 
 R_MIN = 0.5

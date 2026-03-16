@@ -1,0 +1,93 @@
+# Summary: test_por/ Scripts
+
+## Scopo
+Gli script in `test_por/` sono utilizzati per studiare la conducibilità termica effettiva (K_eff) in funzione di:
+- **Porosità totale** (P)
+- **Spessore grain boundary layer** (delta)
+- **Morfologia della porosità** (interconnessa vs distribuita)
+
+## Script Analizzati
+
+### `2_rad_mixed_gen.py` ✅
+**Eseguito con successo** - genera belle microstrutture in poco tempo.
+
+**Caratteristiche:**
+- **Tre tipi di porosità**:
+  1. **Inter-granular pores**: sfere (R=0.03, phi=0.4) distribuite tra i grani
+  2. **Intra-granular pores**: due popolazioni di sfere piccole dentro i grani
+     - R=0.05, phi=0.03
+     - R=0.3, phi=0.19
+  3. **Grain boundary layer**: spessore delta=0.003
+
+- **Pattern di overlay (chiave per capire la fisica!)**:
+  ```python
+  # Primo overlay: inter-pores su grains+boundaries
+  dictionnaire1 = {2:0, 3:0}  # Pori inter e boundaries → grains (solid)
+  structure3 = merope.Structure_3D(multiInclusions2, multiInclusions, dictionnaire1)
+
+  # Secondo overlay: intra-pores su tutto
+  dictionnaire = {0:2}  # Dove ci sono intra-pores, diventano pori
+  structure = merope.Structure_3D(structure3, structure4, dictionnaire)
+  ```
+
+- **Parametri di fit** (linee 69-71):
+  ```python
+  alpha = -0.5484
+  beta = 1.9214
+  gamma = 0.3777
+  # Formula: porosity ≈ alpha*inclPhi + beta*delta + gamma
+  ```
+  Questi parametri legano la porosità totale ai parametri geometrici (inclPhi, delta).
+
+- **Fasi finali**:
+  - Phase 0: grains (solid, K=1.0)
+  - Phase 1: intra-pores (low K=1e-3)
+  - Phase 2: inter-pores (low K=1e-3)
+
+### `iter_delta_IGB_calc.py`
+**Pattern simile** a `2_rad_mixed_gen.py` ma con:
+- Sweep di delta: `np.linspace(0.394, 3, 21)` punti
+- Array pre-calcolati di `inclPhi` per convergere a porosità target
+- Calcola K_eff per ogni combinazione (delta, porosità)
+
+### `IGB_generator.py`
+**Versione semplificata** con solo inter-granular pores (no intra).
+
+## Differenze con `project_root/experiments/run_keff_vs_delta.py`
+
+### Il nostro script (PROBLEMA):
+```python
+# Crea pori UNIFORMI in tutto il volume
+sphIncl_pores.fromHisto(seed, sac_de_billes.TypeAlgo.BOOL, 0., [[inclR, inclPhi_input]], [incl_phase])
+
+# Overlay semplice
+structure = merope.Structure_3D(multiInclusions_pores, multiInclusions_grains, {2:0, 3:0})
+```
+
+**Risultato**: Delta NON influenza la morfologia → K_eff varia poco e in modo errato.
+
+### Gli script in test_por/ (CORRETTO):
+- Separano **inter** (tra grani) e **intra** (dentro grani)
+- Il boundary layer `delta` influenza la **distribuzione spaziale** dei pori inter
+- Delta piccolo → boundaries sottili → pori inter formano rete interconnessa → bassa K_eff
+- Delta grande → boundaries spessi → pori inter più isolati → alta K_eff
+
+## Prossimi Passi
+
+Per sistemare `run_keff_vs_delta.py`:
+
+1. **Separare inter e intra pores** come in `2_rad_mixed_gen.py`
+2. **Usare la formula di fit** `porosity = alpha*inclPhi + beta*delta + gamma` per bilanciare i contributi
+3. **Doppio overlay** per combinare correttamente le tre componenti (grains, inter, intra)
+4. Probabilmente serve **calibrare** i parametri alpha, beta, gamma per il nostro caso specifico
+
+## Note Tecniche
+
+- **VoxelRule.Average**: tutti gli script usano Average + Voigt homogenization
+- **Resolution**: n3D=300 per risultati accurati (vs nostro n3D=100)
+- **TypeAlgo**: BOOL per i pori, RSA per i grani Laguerre
+- **Seed management**: cambiano seed tra iterazioni per evitare fallimenti RSA
+
+---
+
+**Conclusione**: Il segreto sta nel **separare inter e intra porosity** e fare in modo che delta influenzi principalmente la distribuzione dei pori inter-granulari, creando la transizione da morfologia interconnessa a distribuita.
