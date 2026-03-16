@@ -44,11 +44,30 @@ Gli script in `test_por/` sono utilizzati per studiare la conducibilità termica
   - Phase 1: intra-pores (low K=1e-3)
   - Phase 2: inter-pores (low K=1e-3)
 
-### `iter_delta_IGB_calc.py`
-**Pattern simile** a `2_rad_mixed_gen.py` ma con:
-- Sweep di delta: `np.linspace(0.394, 3, 21)` punti
-- Array pre-calcolati di `inclPhi` per convergere a porosità target
-- Calcola K_eff per ogni combinazione (delta, porosità)
+### `iter_delta_IGB_calc.py` ✅
+**Eseguito con successo** - sweep K_eff vs delta a porosità ~costante (~0.20).
+
+**Cosa fa:**
+1. Genera un policristallo Laguerre (lagR=3, RSA) con grain boundary layer di spessore delta
+2. Distribuisce sfere (R=0.3, BOOL) nell'intero volume
+3. Usa `merope.Structure_3D(sphIncl, polyCrystal, dictionnaire)` per confinare i pori:
+   - `{incl_phase:grains_phase, delta_phase:grains_phase}` = i pori dentro i bordi grano diventano fase 0 (poro)
+4. Voxellizza con Average+Voigt, lancia Amitex, salva K_eff
+
+**Parametri:**
+- L=10, n3D=100, inclR=0.3, lagR=3 (grani), K=[1.0, 1.0, 1e-3]
+- 21 punti: delta da 0.394 a 3.0
+- `inclPhi` pre-calcolati per mantenere porosità ~0.20 al variare di delta
+
+**Risultati (P~0.20):**
+| delta | K_mean | Nota |
+|-------|--------|------|
+| 0.39  | 0.289  | Interconnessa, K bassa |
+| 0.92  | 0.675  | Transizione |
+| 1.57  | 0.703  | Quasi plateau |
+| 3.00  | 0.712  | Distribuita, K alta |
+
+**Osservazione chiave:** la porosità cala leggermente (0.26 → 0.20) con delta crescente perché a delta piccolo i pori si ammassano nei bordi sottili e si sovrappongono di piu, generando piu volume poroso effettivo.
 
 ### `IGB_generator.py`
 **Versione semplificata** con solo inter-granular pores (no intra).
