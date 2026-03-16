@@ -57,7 +57,9 @@ Gli script in `test_por/` sono utilizzati per studiare la conducibilità termica
 **Parametri:**
 - L=10, n3D=100, inclR=0.3, lagR=3 (grani), K=[1.0, 1.0, 1e-3]
 - 21 punti: delta da 0.394 a 3.0
-- `inclPhi` pre-calcolati per mantenere porosità ~0.20 al variare di delta
+- Target porosità: `porosity = 0.2` (riga 66)
+- `inclPhi` pre-calcolati (array `a` calibrato a mano, riga 68) per mantenere porosità ~0.20 al variare di delta
+- **Nessun loop iterativo** di correzione: i valori di `a` decrescono con delta (da 0.421 a 0.099) perché strati più spessi catturano più pori. La calibrazione non è perfetta, soprattutto a delta piccoli (P reale = 0.26 vs target 0.20)
 
 **Risultati (P~0.20):**
 | delta | K_mean | Nota |
@@ -70,7 +72,7 @@ Gli script in `test_por/` sono utilizzati per studiare la conducibilità termica
 **Osservazione chiave:** la porosità cala leggermente (0.26 → 0.20) con delta crescente perché a delta piccolo i pori si ammassano nei bordi sottili e si sovrappongono di piu, generando piu volume poroso effettivo.
 
 ### `IGB_generator.py`
-**Versione semplificata** con solo inter-granular pores (no intra).
+**Singola run** con lo stesso core Merope di `iter_delta_IGB_calc.py` (solo inter-granular pores, no intra). Parametri ora allineati al primo caso dello sweep: inclR=0.3, inclPhi=0.842, lagR=3, delta=0.394, n3D=100. ThermalAmitex commentato. Ha anche parametri di fit alpha/beta/gamma definiti ma non usati.
 
 ## Differenze con `project_root/experiments/run_keff_vs_delta.py`
 

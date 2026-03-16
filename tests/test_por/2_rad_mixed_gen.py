@@ -33,7 +33,7 @@ homogRule = merope.HomogenizationRule.Voigt  ## If i want to use homogRule, voxe
 
 # Names of folders that will contain results #
 
-folder_name = 'Result' #nome della cartella che conterrà i risultati
+folder_name = 'Result_2_rad_mixed_gen' #nome della cartella che conterrà i risultati
 folder_path = os.path.join("/home/giovanni/Merope/tests/test_por/Ale_py_files", folder_name)
 
 if os.path.exists(folder_path):

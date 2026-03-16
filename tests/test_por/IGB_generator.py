@@ -25,7 +25,7 @@ from send2trash import send2trash
 # Voxel & Cell INPUTS #
 
 L = [10, 10, 10]
-n3D = 300
+n3D = 100
 seed = 0
 voxel_rule = merope.vox.VoxelRule.Average
 homogRule = merope.HomogenizationRule.Voigt  ## If i want to use homogRule, voxel_rule must be = merope.vox.VoxelRule.Average
@@ -33,7 +33,8 @@ homogRule = merope.HomogenizationRule.Voigt  ## If i want to use homogRule, voxe
 
 # Names of folders that will contain results #
 
-folder_name = 'Result' #nome della cartella che conterrà i risultati
+folder_name = 'Result_IGB_generator' #nome della cartella che conterrà i risultati
+
 folder_path = os.path.join("/home/giovanni/Merope/tests/test_por/Ale_py_files", folder_name)
 
 if os.path.exists(folder_path):
@@ -53,14 +54,14 @@ tic0 = time.time()
 ### EQUAL FILES PARAMETERS FOR THE DETERMINATION OF ALPHA BETA GAMMA PARAMETERS ###
 
 ###########################################
-inclR = 0.1 # POSSIBLE INPUT to determine K
+inclR = 0.3 # POSSIBLE INPUT to determine K
 ###########################################
 
 ###########################################
-inclPhi = 0.2 # Used to determine porosity
+inclPhi = 0.842 # = porosity*10*a[0], first case of iter_delta_IGB_calc
 ###########################################
 
-lagR = 4 # Parameter to determine the grains volumes
+lagR = 3 # Parameter to determine the grains volumes
 lagPhi = 1 # Must be 1 to fill the entire RVE with solid matrix before putting porosities
 
 # fit parameters to be calculated with alpha_beta_gamma file.py #
@@ -74,7 +75,7 @@ porosity = 0.5  # total porosity
 
 ##############
 # 0.135
-delta = 0.001 # thickness of layer POSSIBLE INPUT
+delta = 0.394 # thickness of layer, first case of iter_delta_IGB_calc
 delta_ratio = delta/lagR
 ##############
 
@@ -148,13 +149,30 @@ def ThermalAmitex():
     voxellation_of_zones = vtkname
     amitex.computeThermalCoeff(voxellation_of_zones, number_of_processors)
     homogenized_matrix = amitex_out.printThermalCoeff(".")
-    
+
+# Remove folder if exists
+if os.path.exists(folder_name):
+    shutil.rmtree(folder_name)
+
+# Create folder
 os.mkdir(folder_name)
+
+# Go to folder
 go_to_dir(folder_name)
+
+# Create folder
 os.mkdir(str(n3D))
+
+# Go to folder
 go_to_dir(str(n3D))
+
+# Create crack structure
 Crack_structure_Voxellation(n3D, L, seed, inclRphi, lagRphi, incl_phase, grains_phase, delta_phase, delta, voxel_rule, K, vtkname, fileCoeff)
+
+# Calculate thermal conductivity
 #ThermalAmitex()
+
+# Go back to folder
 go_to_dir("../")
 
 '''

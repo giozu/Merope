@@ -33,9 +33,10 @@ homogRule = merope.HomogenizationRule.Voigt  ## If i want to use homogRule, voxe
 
 # Names of folders that will contain results #
 
-folder_name = 'Result' #nome della cartella che conterrà i risultati
+folder_name = 'Result_Gauss_multi_rad_gen' #nome della cartella che conterrà i risultati
 folder_path = os.path.join("/home/giovanni/Merope/tests/test_por/Ale_py_files", folder_name)
 
+os.makedirs(os.path.dirname(folder_path), exist_ok=True)
 if os.path.exists(folder_path):
     send2trash(folder_path)
     
@@ -165,12 +166,12 @@ def ThermalAmitex():
     amitex.computeThermalCoeff(voxellation_of_zones, number_of_processors)
     homogenized_matrix = amitex_out.printThermalCoeff(".")
     
-os.mkdir(folder_name)
+os.makedirs(folder_name, exist_ok=True)
 go_to_dir(folder_name)
-os.mkdir(str(n3D))
+os.makedirs(str(n3D), exist_ok=True)
 go_to_dir(str(n3D))
 Crack_structure_Voxellation(n3D, L, seed, inclRphi, lagRphi, incl_phase, target_porosity, mean_radius, std_radius, num_radius, grains_phase, delta_phase, delta, voxel_rule, K, vtkname, fileCoeff)
-#ThermalAmitex()
+ThermalAmitex()
 go_to_dir("../")
 
 
