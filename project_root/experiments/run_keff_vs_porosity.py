@@ -339,7 +339,7 @@ def plot_results(df: pd.DataFrame, output_dir: Path) -> None:
     ax1.scatter(df["Phi_Real"], df["K_mean"], marker="o", s=60, color="steelblue", 
                 edgecolor="white", zorder=5, label="Mérope + Amitex")
 
-    ax1.set_ylabel(r"$K_\mathrm{eff}$ [W/m·K]", fontsize=12)
+    ax1.set_ylabel(r"$K_\mathrm{eff}$ (W/m·K)", fontsize=12)
     ax1.set_xlabel(r"Porosity ($\phi_\mathrm{real}$)", fontsize=12)
     ax1.set_title("Thermal Conductivity & Analytical Bounds", fontsize=13, fontweight="bold")
     ax1.legend(fontsize=9, loc="upper right")
@@ -371,7 +371,7 @@ def plot_results(df: pd.DataFrame, output_dir: Path) -> None:
             ax3.plot(df["Phi_Real"][nvox_mask], df["Error_Perc"][nvox_mask], "s", 
                      linewidth=1.0, markersize=6, zorder=3, label=f"N_Vox adaptive = {nvox_val}")
 
-    ax3.set_ylabel("Relative Error vs Loeb [%]", fontsize=12)
+    ax3.set_ylabel("Relative Error vs Loeb (%)", fontsize=12)
     ax3.set_xlabel(r"Porosity ($\phi_\mathrm{real}$)", fontsize=12)
     ax3.set_title("Voxelization/Amitex Converged Error", fontsize=13, fontweight="bold")
     ax3.legend(fontsize=9, loc="upper left")
@@ -410,7 +410,7 @@ def plot_results(df: pd.DataFrame, output_dir: Path) -> None:
         f"R_pore/L_vox = {df['Ratio_Rlvox'].iloc[0]:.2f}\n"
         f"L_RVE / R_pore = {df['Ratio_LR'].iloc[0]:.2f}"
     )
-    plt.text(0.95, 0.05, res_text, transform=fig.transFigure, verticalalignment='bottom', horizontalalignment='right',
+    plt.text(0.94, 0.10, res_text, transform=fig.transFigure, verticalalignment='bottom', horizontalalignment='right',
              bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.4))
 
     fig.tight_layout()
