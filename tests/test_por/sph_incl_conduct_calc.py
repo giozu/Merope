@@ -33,7 +33,8 @@ Cmm = 3 #lunghezza RVE in mm
 Rmicron = R/C *Cmm*1000 #raggio porosità in micron
 
 file_output_path = "risultato_conduttivita.txt"  # Unico file di output
-file_aggregato_path = os.path.join("/home/alessio/Merope/Esercitazione", "conductivity_results.txt")  # File aggregato nella directory principale
+file_aggregato_path = os.path.join("/home/giovanni/Merope/tests/test_por/Ale_py_files/Result_sph_incl_conduct_calc", "conductivity_results.txt")
+os.makedirs(os.path.dirname(file_aggregato_path), exist_ok=True)
 
 # Funzione per generare la voxellation e la struttura inclusa
 def VoxellationInclusion(SizeRVE, Seed, R, Porosity, K, Voxellation):
@@ -45,7 +46,7 @@ def VoxellationInclusion(SizeRVE, Seed, R, Porosity, K, Voxellation):
     grid = merope.Voxellation_3D(multiInclusions)
     grid.setPureCoeffs(K)
     grid.setHomogRule(merope.HomogenizationRule.Voigt)
-    grid.setVoxelRule(merope.VoxelRule.Average)
+    grid.setVoxelRule(merope.vox.VoxelRule.Average)
     grid.proceed(Voxellation)
     grid.printFile("Zone.vtk", "Coeffs.txt")
 
@@ -99,16 +100,20 @@ def aggiorna_file_aggregato(file_aggregato, porosity, seed_index, valori, C, Cmm
 
 # Funzione principale per generare strutture e salvare i risultati
 def main():
+    result_dir = os.path.dirname(file_aggregato_path)
+    os.makedirs(result_dir, exist_ok=True)
+    os.chdir(result_dir)
+
     if os.path.exists(file_output_path):
         open(file_output_path, 'w').close()
 
     # Inizializza il valore della porosità
     porosity = PorosityMin
     for i in range(NbPorosity):
-        os.mkdir(f'Porosity of {porosity:.4f}')
+        os.makedirs(f'Porosity of {porosity:.4f}', exist_ok=True)
         os.chdir(f'Porosity of {porosity:.4f}')
         for seed in range(NbSeed):
-            os.mkdir(f'Seed of {seed}')
+            os.makedirs(f'Seed of {seed}', exist_ok=True)
             os.chdir(f'Seed of {seed}')
             VoxellationInclusion(SizeRVE, seed, R, porosity, K, Voxellation)
             ThermalAmitex()

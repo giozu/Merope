@@ -34,12 +34,14 @@ homogRule = merope.HomogenizationRule.Voigt  ## If i want to use homogRule, voxe
 
 # Names of folders that will contain results #
 
-folder_name = 'Result' #nome della cartella che conterrà i risultati
+folder_name = 'Result_mixed_intra_inter' #nome della cartella che conterrà i risultati
 folder_path = os.path.join("/home/giovanni/Merope/tests/test_por/Ale_py_files", folder_name)
 file_output_path = "porDelta_conduct_results.txt"
 
+os.makedirs(folder_path, exist_ok=True)
 if os.path.exists(folder_path):
     send2trash(folder_path)
+os.makedirs(folder_path, exist_ok=True)
     
 vtkname = "crack_structure.vtk"
 fileCoeff = "Coeffs.txt"
@@ -203,6 +205,7 @@ def aggiorna_file_aggregato(file_aggregato, porDelta, porIntra, seed, valori, in
 
 # Funzione principale per generare strutture e salvare i risultati
 def main():
+    os.makedirs(folder_path, exist_ok=True)
     file_aggregato = os.path.join(folder_path, "aggregated_results.txt")
 
     if os.path.exists(file_output_path):

@@ -82,6 +82,28 @@ Gli script in `test_por/` sono utilizzati per studiare la conducibilità termica
 - delta=3, lagR=3 (quindi delta=L_grain), n3D=100
 - Per ogni inclPhi: genera struttura, lancia Amitex, salva K_eff in `aggregated_results.txt`
 
+### `sph_incl_conduct_calc.py` ✅
+**Eseguito con successo** - caso base: sfere RSA isolate in matrice, senza grain boundaries ne overlay.
+
+**Cosa fa:**
+- Genera sfere RSA (R=0.8, fase 1) in matrice (fase 0), L=20, n3D=40
+- Sweep su 5 porosità da 0.05 a 0.30, lancia Amitex per ognuna
+- Usa vecchia API `merope.Voxellation_3D`, solo 2 fasi (K=[1.0, 1e-3])
+
+**Risultati:**
+| Porosity | K_mean |
+|----------|--------|
+| 0.05     | 0.925  |
+| 0.11     | 0.835  |
+| 0.18     | 0.749  |
+| 0.24     | 0.667  |
+| 0.30     | 0.589  |
+
+K_eff cala quasi linearmente con la porosità — caso classico di inclusioni sferiche distribuite (confrontabile con Maxwell-Garnett).
+
+### `Gauss_multi_rad_gen.py`
+Come `2_rad_mixed_gen.py` ma con **distribuzione gaussiana** dei raggi per i pori intra-granulari (N(0.3, 0.13), 5 popolazioni). n3D=300, delta=0.003. ThermalAmitex ora decommentato.
+
 ## Differenze con `project_root/experiments/run_keff_vs_delta.py`
 
 ### Il nostro script (PROBLEMA):
