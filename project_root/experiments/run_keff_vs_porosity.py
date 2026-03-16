@@ -291,6 +291,9 @@ def run_simulations(output_dir: Path, no_solver: bool = False) -> pd.DataFrame:
 
     tasks = [(p, output_dir, no_solver) for p in PHI_VALUES]
     
+    # Use 1 worker for debugging
+    # with concurrent.futures.ProcessPoolExecutor(max_workers=1) as executor:
+    # Use 4 workers for parallel processing
     with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
         raw_results = list(executor.map(worker, tasks))
 
