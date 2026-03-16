@@ -74,6 +74,14 @@ Gli script in `test_por/` sono utilizzati per studiare la conducibilità termica
 ### `IGB_generator.py`
 **Singola run** con lo stesso core Merope di `iter_delta_IGB_calc.py` (solo inter-granular pores, no intra). Parametri ora allineati al primo caso dello sweep: inclR=0.3, inclPhi=0.842, lagR=3, delta=0.394, n3D=100. ThermalAmitex commentato. Ha anche parametri di fit alpha/beta/gamma definiti ma non usati.
 
+### `IGB_porosity_calc.py` ✅
+**Eseguito con successo** - sweep K_eff vs porosità a delta fisso. Stesso core Merope di `iter_delta_IGB_calc.py`. Probabilmente usato per generare il grafico K_eff vs Porosity della slide (due curve: delta=L_grain e delta=L_grain/3).
+
+**Cosa fa ora:**
+- Sweep di inclPhi: `np.linspace(0.02, 0.3, 20)` → 20 punti di porosità crescente
+- delta=3, lagR=3 (quindi delta=L_grain), n3D=100
+- Per ogni inclPhi: genera struttura, lancia Amitex, salva K_eff in `aggregated_results.txt`
+
 ## Differenze con `project_root/experiments/run_keff_vs_delta.py`
 
 ### Il nostro script (PROBLEMA):
