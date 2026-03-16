@@ -41,9 +41,9 @@ K_THERMAL = [1.0, 1.0, 1e-3]   # Phase 0=Matrix, 1=Boundary(Solid), 2=Pore
 FIXED_GRAIN_R = 1.0
 
 # Delta values: scan from 0.1 to 0.9 to capture full crack-to-sphere transition
-DELTA_VALUES = [0.2, 0.8]  # Test with 2 points first
+DELTA_VALUES = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
 # Porosity targets: three curves like in the reference plot
-P_TARGETS    = [0.3]  # Test with one porosity first
+P_TARGETS    = [0.1, 0.2, 0.3]
 OUTPUT_DIR   = Path("Results_Keff_vs_Delta")
 
 R_MIN = 0.5
@@ -64,15 +64,14 @@ def worker(task_args):
 
     case_dir = OUTPUT_DIR / f"P_{p_target:.2f}_Delta_{delta:.3f}"
 
-    # Phase strategy from 2_rad_mixed_gen.py:
-    # - Separate INTER-granular (between grains) and INTRA-granular (inside grains) pores
-    # - Double overlay: (1) inter + grains+boundaries, (2) intra on top
-    # - Delta controls morphology: small delta → interconnected inter pores → low K_eff
-    #                              large delta → isolated inter pores → high K_eff
-    # Final phases: 0=grains+boundaries (solid), 1=intra-pores, 2=inter-pores
+    # Phase strategy from iter_delta_IGB_calc.py:
+    # - Create Laguerre grains with boundary layer
+    # - Create spherical pore inclusions
+    # - Overlay pores on grains: pores "win" where they exist
+    # - Final phases: 0=grains+boundaries (solid), 2=pores (low K)
+    # K_THERMAL = [K_solid, K_solid, K_pore]
 
-    inter_phase = 2     # Inter-granular pores (between grains)
-    intra_phase = 1     # Intra-granular pores (inside grains)
+    incl_phase = 2      # Pores
     delta_phase = 3     # Grain boundary layer (temporary)
     grains_phase = 0    # Grain cores (solid)
 
@@ -82,15 +81,8 @@ def worker(task_args):
     # Microstructure parameters
     lagR = 1.0          # Laguerre grain size
     lagPhi = 1.0        # Fill entire RVE with grains
-
-    # Inter-granular pores (distributed in boundary network)
-    # These create the interconnection that delta controls
-    interR = 0.03       # Small pores in boundaries
-    interPhi_input = p_target * 0.5  # ~50% of porosity from inter
-
-    # Intra-granular pores (inside grains, always distributed)
-    # Two populations like in 2_rad_mixed_gen.py
-    intraRphi = [[0.05, 0.03], [0.3, 0.19]]  # Fixed values from 2_rad_mixed_gen.py
+    inclR = 0.15        # Pore radius
+    inclPhi_input = p_target * 0.8  # Initial guess for pore volume fraction
 
     p_real = 0.0
 
@@ -99,34 +91,20 @@ def worker(task_args):
         try:
             current_seed = 42 + iteration
 
-            # 1. Create INTER-granular pores (phase 2) - in boundary network
-            sphIncl_inter = merope.SphereInclusions_3D()
-            sphIncl_inter.setLength(domain_size)
-            sphIncl_inter.fromHisto(
+            # 1. Create spherical pore inclusions (phase 2)
+            sphIncl_pores = merope.SphereInclusions_3D()
+            sphIncl_pores.setLength(domain_size)
+            sphIncl_pores.fromHisto(
                 current_seed,
                 sac_de_billes.TypeAlgo.BOOL,
                 0.0,
-                [[interR, interPhi_input]],
-                [inter_phase]  # Phase 2 = inter pores
+                [[inclR, inclPhi_input]],
+                [incl_phase]  # Phase 2 = pores
             )
-            multiInclusions_inter = merope.MultiInclusions_3D()
-            multiInclusions_inter.setInclusions(sphIncl_inter)
+            multiInclusions_pores = merope.MultiInclusions_3D()
+            multiInclusions_pores.setInclusions(sphIncl_pores)
 
-            # 2. Create INTRA-granular pores (phase 1) - inside grains
-            sphIncl_intra = merope.SphereInclusions_3D()
-            sphIncl_intra.setLength(domain_size)
-            sphIncl_intra.fromHisto(
-                current_seed,
-                sac_de_billes.TypeAlgo.BOOL,
-                0.0,
-                intraRphi,
-                [intra_phase, intra_phase]  # Both populations → phase 1
-            )
-            multiInclusions_intra = merope.MultiInclusions_3D()
-            multiInclusions_intra.setInclusions(sphIncl_intra)
-            structure_intra = merope.Structure_3D(multiInclusions_intra)
-
-            # 3. Create Laguerre tessellation for grains
+            # 2. Create Laguerre tessellation for grains
             sphIncl_grains = merope.SphereInclusions_3D()
             sphIncl_grains.setLength(domain_size)
             sphIncl_grains.fromHisto(
@@ -146,56 +124,43 @@ def worker(task_args):
             multiInclusions_grains.addLayer(ids, delta_phase, delta)  # Boundaries = phase 3
             multiInclusions_grains.changePhase(ids, [1 for _ in ids])  # Cores = phase 1
 
-            # 4. FIRST OVERLAY: inter-pores + grains+boundaries
-            # Remap: inter(2)→grains(0), boundaries(3)→grains(0)
-            # Result: where inter-pores exist, they stay as pores (phase 2)
-            dictionnaire1 = {inter_phase: grains_phase, delta_phase: grains_phase}
-            structure_inter_on_grains = merope.Structure_3D(
-                multiInclusions_inter,
-                multiInclusions_grains,
-                dictionnaire1
-            )
-
-            # 5. SECOND OVERLAY: intra-pores on top of everything
-            # No remap needed - intra-pores (phase 1) overlay on top and stay as phase 1
-            # Final result: phase 0=solid, phase 1=intra-pores, phase 2=inter-pores
+            # 3. Combine structures with remapping
+            # Following iter_delta_IGB_calc.py line 124-127:
+            # Remap both pores (2) and boundaries (3) to grains (0)
+            # But pores overlay on top, so where pores exist, they stay as pores
+            dictionnaire = {incl_phase: grains_phase, delta_phase: grains_phase}
             structure = merope.Structure_3D(
-                structure_inter_on_grains,
-                structure_intra,
-                {}  # Empty dict = no remapping, intra wins where it exists
+                multiInclusions_pores,
+                multiInclusions_grains,
+                dictionnaire
             )
 
-            # 6. Voxellate
+            # 4. Voxellate
             with pm.cd(str(case_dir)):
                 fractions = builder.voxellate(structure, K_THERMAL)
 
-            # Phase 0 = grains+boundaries (solid), Phase 1 = intra, Phase 2 = inter+intra (merged)
+            # Phase 0 = grains+boundaries (solid), Phase 2 = pores
             phi_solid = fractions.get(0, 0.0)
-            phi_intra = fractions.get(1, 0.0)
-            phi_inter = fractions.get(2, 0.0)
-            p_real = phi_intra + phi_inter  # Total porosity
+            phi_pores = fractions.get(2, 0.0)
+            p_real = phi_pores
 
-            print(f"   [Iter {iteration}] delta={delta:.3f}, interPhi={interPhi_input:.3f} -> solid={phi_solid:.3f}, intra={phi_intra:.3f}, inter={phi_inter:.3f}, tot={p_real:.3f} (tgt={p_target:.2f})")
+            print(f"   [Iter {iteration}] delta={delta:.3f}, inclPhi_in={inclPhi_input:.3f} -> solid={phi_solid:.3f}, pores={phi_pores:.3f} (tgt={p_target:.2f})")
 
             # More tolerant convergence criterion: ±5% error acceptable
             if abs(p_real - p_target) < 0.05:
                 print(f"   ✓ Converged within 5%")
                 break
 
-            # Adjust inter-pore fraction to hit target porosity
+            # Adjust pore volume fraction to hit target porosity
             error = p_target - p_real
-            interPhi_input += error * 0.8  # Aggressive adjustment on inter-pores
-            interPhi_input = float(np.clip(interPhi_input, 0.01, 0.7))
-
-            # Also adjust intra slightly
-            intraRphi = [[0.05, p_target * 0.15], [0.15, p_target * 0.35 + error * 0.1]]
+            inclPhi_input += error * 0.8  # Aggressive adjustment
+            inclPhi_input = float(np.clip(inclPhi_input, 0.01, 0.7))
 
         except RuntimeError as e:
-            # If RSA/BOOL fails, reduce pore fractions
+            # If RSA/BOOL fails, reduce pore fraction
             print(f"   [Iter {iteration}] Sphere packing error: {e}")
-            interPhi_input *= 0.7
-            interPhi_input = max(0.01, interPhi_input)
-            intraRphi = [[0.05, max(0.01, p_target * 0.10)], [0.15, max(0.01, p_target * 0.25)]]
+            inclPhi_input *= 0.7
+            inclPhi_input = max(0.01, inclPhi_input)
             if iteration > 5:
                 print(f"   ⚠ Accepting p_real={p_real:.4f} after {iteration} iterations")
                 break
