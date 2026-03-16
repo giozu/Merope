@@ -27,15 +27,17 @@ def loeb_model(p, k_m=K_MATRIX, alpha=ALPHA_LOEB):
     return np.maximum(0.0, k_m * (1.0 - alpha * p))
 
 def sigmoidal_correction(delta, k_min, k_max, b, delta_c):
-    """Sigmoidal correction factor K_delta(delta)."""
-    return k_min + (k_max - k_min) / (1 + np.exp(-b * (delta - delta_c)))
+    """Sigmoidal correction factor K_delta(delta). Always returns positive values."""
+    result = k_min + (k_max - k_min) / (1 + np.exp(b * (delta - delta_c)))
+    return np.maximum(0.0, result)  # Enforce K_delta >= 0
 
 def full_model(p_delta, k_min, k_max, b, delta_c):
-    """Combined model: K_eff = K_Loeb(p) * K_delta(delta).
+    """Combined model: K_eff = K_Loeb(p) * K_delta(delta). Always positive.
     Note: p_delta is passed as a tuple/array or we assume p is fixed for a single fit.
     """
     p, delta = p_delta
-    return loeb_model(p) * sigmoidal_correction(delta, k_min, k_max, b, delta_c)
+    result = loeb_model(p) * sigmoidal_correction(delta, k_min, k_max, b, delta_c)
+    return np.maximum(0.0, result)  # Enforce K_eff >= 0
 
 def generate_synthetic_data():
     """Generates synthetic data matching the trends in the slide for verification."""
@@ -116,10 +118,12 @@ def fit_all(df, output_dir):
         # We fit K_delta = K_eff / K_Loeb
         y_corr = y / k_loeb
         
-        # Initial guess
-        p0 = [0.1, 1.0, 10.0, 0.2] # k_min, k_max, b, delta_c
+        # Initial guess: k_min, k_max, b (negative!), delta_c
+        p0 = [0.2, 1.0, -3.0, 1.0] # k_min < k_max, b < 0 for correct transition
+        # Bounds: k_min >= 0, k_max <= 1.1, b < 0, delta_c in [0, 4]
+        bounds = ([0.0, 0.8, -20.0, 0.0], [0.95, 1.1, -0.5, 4.0])
         try:
-            popt, _ = curve_fit(sigmoidal_correction, x, y_corr, p0=p0, maxfev=10000)
+            popt, _ = curve_fit(sigmoidal_correction, x, y_corr, p0=p0, bounds=bounds, maxfev=10000)
             k_min, k_max, b, delta_c = popt
             
             # Plotting
