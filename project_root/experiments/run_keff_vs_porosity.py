@@ -50,18 +50,28 @@ except ImportError as _import_err:
 # CONFIGURATION – edit here
 # =============================================================================
 L_DIM   = [15.0, 15.0, 15.0]    # RVE size [μm] (cubic). Increased to 15 to ensure L_RVE/R_pore > 20
-N_VOX_BASE = 80                 # Starting voxels per side
-SEED    = 42
+# Sphere radius / porosity sweep
+SPHERE_R  = 0.5                           # pore radius [same units as L_DIM]
+PHI_VALUES = np.linspace(0.05, 0.30, 12)  # porosity range to simulate
+
+SEED = 42  # Added back for repeatability
+
+# === DYNAMIC CONSTRAINT RESOLUTION ===
+# Constraint 1: L_RVE / R_pore > 20
+if SPHERE_R >= L_DIM[0] / 20.0:
+    raise ValueError(
+        f"Geometric representative fail: SPHERE_R={SPHERE_R} is too large for "
+        f"L_DIM={L_DIM[0]} (Must be < {L_DIM[0]/20.0})"
+    )
+
+# Constraint 2: N_VOX_BASE ensures R_pore / L_vox > 2
+N_VOX_BASE = int(np.ceil(2.0 * L_DIM[0] / SPHERE_R))
 
 # Adaptive Resolution Settings
 ADAPTIVE_VOX   = True
-MAX_ERROR_PERC = 1.0            # Strict 1% error tolerance
-MAX_N_VOX      = 100            # Maximum allowed N_VOX
-N_VOX_STEP     = 30             # How much to increase N_VOX each time
-
-# Sphere radius / porosity sweep
-SPHERE_R  = 0.5                          # pore radius [same units as L_DIM]
-PHI_VALUES = np.linspace(0.10, 0.20, 1)  # porosity range to simulate
+MAX_ERROR_PERC = 1.0              # Strict 1% error tolerance
+MAX_N_VOX      = N_VOX_BASE + 40  # Maximum allowed N_VOX (breathing room for iteration)
+N_VOX_STEP     = 20               # How much to increase N_VOX each time
 
 # Thermal properties
 K_MAT  = 1.0    # matrix conductivity  [W/m·K]  (normalised to 1)
@@ -300,78 +310,112 @@ def run_simulations(output_dir: Path, no_solver: bool = False) -> pd.DataFrame:
 
 # =============================================================================
 # PLOTTING
-# =============================================================================
-
 def plot_results(df: pd.DataFrame, output_dir: Path) -> None:
-    """Enhanced plots including error analysis and resolution checks."""
+    """Professional 4-panel canvas including error analysis & Voigt/Reuss limits."""
 
     # Filter out duplicate Phi_Target by keeping only the one with maximum N_Vox
     if "N_Vox" in df.columns:
         df = df.loc[df.groupby("Phi_Target")["N_Vox"].idxmax()].reset_index(drop=True)
 
-    phi   = df["Phi_Real"].to_numpy()
-    phi_s = np.linspace(0.0, phi.max() * 1.05, 200)
+    phi_r = df["Phi_Real"].to_numpy()
+    phi_s = np.linspace(0.0, max(0.35, phi_r.max() * 1.05), 200)
 
-    # 1. Main Plot: K vs Porosity
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 10), sharex=True)
+    # 0. Analytical Bounds & Models Formula
+    k_maxw  = maxwell_eucken(phi_s)
+    k_loeb  = loeb(phi_s)
+    k_voigt = (1.0 - phi_s) * K_MAT + phi_s * K_PORE
+    with np.errstate(divide='ignore'):
+        k_reuss = 1.0 / ((1.0 - phi_s) / K_MAT + phi_s / K_PORE)
 
-    ax1.plot(phi_s, maxwell_eucken(phi_s), "r-",  linewidth=1.5, label="Maxwell–Eucken")
-    ax1.plot(phi_s, loeb(phi_s),           "g--", linewidth=1.1, label="Loeb (1954)")
-    ax1.scatter(df["Phi_Real"], df["K_mean"], marker="o", s=50, color="steelblue", 
+    fig, axs = plt.subplots(2, 2, figsize=(14, 12))
+    ax1, ax2 = axs[0, 0], axs[0, 1]
+    ax3, ax4 = axs[1, 0], axs[1, 1]
+
+    # 1. Main Subplot: K_eff vs Porosity (All Models & Bounds)
+    ax1.plot(phi_s, k_voigt, "k:", linewidth=1.2, label="Voigt Bound (Parallel)")
+    ax1.plot(phi_s, k_reuss, "k--", linewidth=1.2, label="Reuss Bound (Series)")
+    ax1.plot(phi_s, k_maxw,  "r-",  linewidth=1.4, label="Maxwell–Eucken")
+    ax1.plot(phi_s, k_loeb,  "g--", linewidth=1.2, label="Loeb (1954)")
+    ax1.scatter(df["Phi_Real"], df["K_mean"], marker="o", s=60, color="steelblue", 
                 edgecolor="white", zorder=5, label="Mérope + Amitex")
 
     ax1.set_ylabel(r"$K_\mathrm{eff}$ [W/m·K]", fontsize=12)
-    ax1.set_title("Thermal Conductivity Validation", fontsize=14, fontweight="bold")
-    ax1.legend(fontsize=10)
+    ax1.set_xlabel(r"Porosity ($\phi_\mathrm{real}$)", fontsize=12)
+    ax1.set_title("Thermal Conductivity & Analytical Bounds", fontsize=13, fontweight="bold")
+    ax1.legend(fontsize=9, loc="upper right")
     ax1.grid(True, linestyle="--", alpha=0.3)
     ax1.set_ylim(bottom=0.0, top=1.05)
+    ax1.set_xlim(left=0.0)
 
-    # 2. Error Plot: Relative Error vs Loeb
-    # Color points differently if N_VOX was increased (Adaptive)
+    # 2. Voxelization Delta: |Phi_Target - Phi_Real| vs Phi_Target
+    if "Phi_Target" in df.columns:
+        voxel_error = df["Phi_Real"] - df["Phi_Target"]
+        ax2.bar(df["Phi_Target"], voxel_error, width=0.015, color="teal", alpha=0.7, 
+                edgecolor="black", label=r"$\Delta \phi = \phi_{real} - \phi_{target}$")
+        ax2.axhline(0, color="grey", linewidth=0.8)
+        ax2.set_ylabel(r"Porosity Error $\Delta \phi$", fontsize=12)
+        ax2.set_xlabel(r"Target Porosity ($\phi_\mathrm{target}$)", fontsize=12)
+        ax2.set_title("Voxelization Fraction Precision", fontsize=13, fontweight="bold")
+        ax2.legend(fontsize=9)
+        ax2.grid(True, linestyle="--", alpha=0.3)
+
+    # 3. Relative Error vs Loeb
     adaptive_mask = df["N_Vox"] > N_VOX_BASE
     base_mask = ~adaptive_mask
-    
-    # Draw line through all points
-    ax2.plot(df["Phi_Real"], df["Error_Perc"], "-", color="lightgray", linewidth=1.0, zorder=1)
-    
-    # Plot base points
-    ax2.plot(df["Phi_Real"][base_mask], df["Error_Perc"][base_mask], "o", 
-             color="crimson", linewidth=1.0, markersize=5, zorder=2, label=f"N_Vox = {df['N_Vox'].min()}")
-    
-    # Plot adaptive points
+    ax3.plot(df["Phi_Real"], df["Error_Perc"], "-", color="lightgray", linewidth=1.0, zorder=1)
+    ax3.plot(df["Phi_Real"][base_mask], df["Error_Perc"][base_mask], "o", 
+             color="crimson", linewidth=1.0, markersize=6, zorder=2, label=f"N_Vox Base ({N_VOX_BASE})")
     if adaptive_mask.any():
-        adaptive_df = df[adaptive_mask]
-        colors = ["orange", "darkorange", "chocolate", "saddlebrown", "coral"]
-        for i, nvox_val in enumerate(sorted(adaptive_df["N_Vox"].unique())):
-            c = colors[i % len(colors)]
+        for nvox_val in sorted(df["N_Vox"][adaptive_mask].unique()):
             nvox_mask = df["N_Vox"] == nvox_val
-            ax2.plot(df["Phi_Real"][nvox_mask], df["Error_Perc"][nvox_mask], "s", 
-                     color=c, linewidth=1.0, markersize=5, zorder=3, label=f"N_Vox = {nvox_val}")
+            ax3.plot(df["Phi_Real"][nvox_mask], df["Error_Perc"][nvox_mask], "s", 
+                     linewidth=1.0, markersize=6, zorder=3, label=f"N_Vox adaptive = {nvox_val}")
 
-    ax2.legend(fontsize=9, loc="upper left")
-    ax2.set_ylabel("Rel. Error vs Loeb [%]", fontsize=12)
-    ax2.set_xlabel("Porosity", fontsize=12)
-    ax2.grid(True, linestyle="--", alpha=0.3)
-    ax2.set_ylim(bottom=0.0)
+    ax3.set_ylabel("Relative Error vs Loeb [%]", fontsize=12)
+    ax3.set_xlabel(r"Porosity ($\phi_\mathrm{real}$)", fontsize=12)
+    ax3.set_title("Voxelization/Amitex Converged Error", fontsize=13, fontweight="bold")
+    ax3.legend(fontsize=9, loc="upper left")
+    ax3.grid(True, linestyle="--", alpha=0.3)
+    ax3.set_ylim(bottom=0.0)
 
-    # Annotate with Resolution Info
+    # 4. Geometric Ratios (Representativeness & Resolution) vs Porosity
+    if "Phi_Target" in df.columns:
+        # Plot Resolution R/L_vox
+        ax4.scatter(df["Phi_Target"], df["Ratio_Rlvox"], s=60, c="darkorange", marker="o", 
+                    edgecolor="white", zorder=3, label=r"Resolution ($R_\mathrm{pore}/L_\mathrm{vox}$)")
+        ax4.plot(df["Phi_Target"], df["Ratio_Rlvox"], "-", color="darkorange", alpha=0.5, linewidth=1.2)
+        
+        # Plot Representativeness baseline
+        ax4.axhline(df["Ratio_LR"].iloc[0], color="crimson", linewidth=1.2, linestyle="--", 
+                    label=r"Representativeness ($L_\mathrm{RVE}/R_\mathrm{pore}$)")
+        
+        # Add a minimum constraint line at 2.0 or reference
+        ax4.axhline(2.0, color="grey", linewidth=0.8, linestyle=":", label="Constraint: $R/L_{vox} > 2$")
+        ax4.axhline(20.0, color="grey", linewidth=0.8, linestyle="-.", label="Constraint: $L/R > 20$")
+
+        ax4.set_ylabel("Geometric Ratio", fontsize=12)
+        ax4.set_xlabel(r"Target Porosity ($\phi_\mathrm{target}$)", fontsize=12)
+        ax4.set_title("Geometric Criteria & Resolution", fontsize=13, fontweight="bold")
+        ax4.grid(True, linestyle="--", alpha=0.3)
+        ax4.legend(fontsize=8, loc="center right")
+        
+        # Offset limits for breathing room
+        ax4.set_ylim(0, max(df["Ratio_LR"].iloc[0], df["Ratio_Rlvox"].max()) * 1.25)
+
+    # Global Annotated text
     max_nvox_used = df["N_Vox"].max()
     res_text = (
-        f"Resolution Info:\n"
+        f"Resolution Specs:\n"
         f"Base N_vox = {N_VOX_BASE}\n"
-        f"Max used = {max_nvox_used}\n"
         f"R_pore/L_vox = {df['Ratio_Rlvox'].iloc[0]:.2f}\n"
         f"L_RVE / R_pore = {df['Ratio_LR'].iloc[0]:.2f}"
     )
-    # Place text at the bottom right where there is empty space
-    plt.text(0.95, 0.05, res_text, transform=ax2.transAxes, verticalalignment='bottom', horizontalalignment='right',
-             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+    plt.text(0.95, 0.05, res_text, transform=fig.transFigure, verticalalignment='bottom', horizontalalignment='right',
+             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.4))
 
     fig.tight_layout()
     img_path = output_dir / "Keff_Validation_Summary.png"
     fig.savefig(img_path, dpi=300)
-    
-    # Save a legacy simple plot for compatibility if needed
     plt.close(fig)
     print(f"Summary figure saved → {img_path}")
 
