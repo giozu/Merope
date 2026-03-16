@@ -31,20 +31,21 @@ from core.utils import ProjectManager
 import merope
 import sac_de_billes
 
-# --- Configuration ---
+# --- Configuration (matching iter_delta_IGB_calc.py) ---
 L_DIM = [10.0, 10.0, 10.0]    # RVE size (physical units)
-N_VOX = 100  # Higher resolution for better accuracy (100^3 = 1M voxels)
-K_THERMAL = [1.0, 1.0, 1e-3]   # Phase 0=Matrix, 1=Boundary(Solid), 2=Pore
+N_VOX = 100  # Resolution (100^3 = 1M voxels)
+K_THERMAL = [1.0, 1.0, 1e-3]   # Phase 0=Solid, 1=Solid, 2=Pore
 
-# Normalized grain radius L_grain = 1.0 (adimensionalization)
-# This makes delta a relative parameter: delta/L_grain ∈ [0, 1]
-FIXED_GRAIN_R = 1.0
+# Parameters from iter_delta_IGB_calc.py
+INCL_R = 0.3      # Pore radius (10x bigger than before!)
+LAG_R = 3.0       # Laguerre grain size (3x bigger than before!)
+LAG_PHI = 1.0     # Fill entire RVE
 
-# Delta values: scan from 0.1 to 0.9 to capture full crack-to-sphere transition
-DELTA_VALUES = [0.2, 0.8]  # Test with 2 points first
-# Porosity targets: three curves like in the reference plot
-P_TARGETS    = [0.3]  # Test with one porosity first
-OUTPUT_DIR   = Path("Results_Keff_vs_Delta")
+# Delta range from iter_delta_IGB_calc.py: 0.39 to 3.0
+DELTA_VALUES = np.linspace(0.39, 3.0, 21)  # 21 points like reference
+# Porosity targets: three curves
+P_TARGETS = [0.1, 0.2, 0.3]
+OUTPUT_DIR = Path("Results_Keff_vs_Delta")
 
 R_MIN = 0.5
 R_MAX = 4.0   
@@ -56,166 +57,124 @@ def _grain_radius_for_phi(p: float, delta: float) -> float:
     return float(np.clip(r, R_MIN, R_MAX))
 
 def worker(task_args):
+    """Worker function following EXACT pattern from iter_delta_IGB_calc.py"""
     p_target, delta, no_solver = task_args
 
     builder = MicrostructureBuilder(L=L_DIM, n3D=N_VOX, seed=42)
-    solver  = ThermalSolver(n_cpus=1)
+    solver = ThermalSolver(n_cpus=1)
     pm = ProjectManager()
 
     case_dir = OUTPUT_DIR / f"P_{p_target:.2f}_Delta_{delta:.3f}"
 
-    # Phase strategy from 2_rad_mixed_gen.py:
-    # - Separate INTER-granular (between grains) and INTRA-granular (inside grains) pores
-    # - Double overlay: (1) inter + grains+boundaries, (2) intra on top
-    # - Delta controls morphology: small delta → interconnected inter pores → low K_eff
-    #                              large delta → isolated inter pores → high K_eff
-    # Final phases: 0=grains+boundaries (solid), 1=intra-pores, 2=inter-pores
-
-    inter_phase = 2     # Inter-granular pores (between grains)
-    intra_phase = 1     # Intra-granular pores (inside grains)
+    # Phase IDs (same as iter_delta_IGB_calc.py lines 82-84)
+    incl_phase = 2      # Pores
     delta_phase = 3     # Grain boundary layer (temporary)
-    grains_phase = 0    # Grain cores (solid)
+    grains_phase = 0    # Grains (final solid phase)
 
     # Domain size
     domain_size = L_DIM
+    lagRphi = [LAG_R, LAG_PHI]
 
-    # Microstructure parameters
-    lagR = 1.0          # Laguerre grain size
-    lagPhi = 1.0        # Fill entire RVE with grains
-
-    # Inter-granular pores (distributed in boundary network)
-    # These create the interconnection that delta controls
-    interR = 0.03       # Small pores in boundaries
-    interPhi_input = p_target * 0.5  # ~50% of porosity from inter
-
-    # Intra-granular pores (inside grains, always distributed)
-    # Two populations like in 2_rad_mixed_gen.py
-    intraRphi = [[0.05, 0.03], [0.3, 0.19]]  # Fixed values from 2_rad_mixed_gen.py
+    # Initial guess for inclPhi using pre-calculated array as starting point
+    a = [0.421, 0.3, 0.24, 0.201, 0.175, 0.157, 0.144, 0.134, 0.127, 0.121,
+         0.117, 0.1125, 0.11, 0.108, 0.105, 0.103, 0.101, 0.1, 0.099, 0.099, 0.099]
+    inclPhi_array = [p_target * 10 * x for x in a]
+    delta_idx = np.argmin(np.abs(DELTA_VALUES - delta))
+    inclPhi = inclPhi_array[delta_idx]
 
     p_real = 0.0
 
-    # Iterative refinement to hit p_target
-    for iteration in range(8):
+    # Iterative convergence loop (max 10 iterations)
+    for iteration in range(10):
         try:
-            current_seed = 42 + iteration
+            seed = 42 + iteration  # Change seed if packing fails
 
-            # 1. Create INTER-granular pores (phase 2) - in boundary network
-            sphIncl_inter = merope.SphereInclusions_3D()
-            sphIncl_inter.setLength(domain_size)
-            sphIncl_inter.fromHisto(
-                current_seed,
+            # 1. Create spherical pore inclusions (phase 2)
+            sphIncl_pores = merope.SphereInclusions_3D()
+            sphIncl_pores.setLength(domain_size)
+            sphIncl_pores.fromHisto(
+                seed,
                 sac_de_billes.TypeAlgo.BOOL,
                 0.0,
-                [[interR, interPhi_input]],
-                [inter_phase]  # Phase 2 = inter pores
+                [[INCL_R, inclPhi]],
+                [incl_phase]
             )
-            multiInclusions_inter = merope.MultiInclusions_3D()
-            multiInclusions_inter.setInclusions(sphIncl_inter)
+            multiInclusions_pores = merope.MultiInclusions_3D()
+            multiInclusions_pores.setInclusions(sphIncl_pores)
 
-            # 2. Create INTRA-granular pores (phase 1) - inside grains
-            sphIncl_intra = merope.SphereInclusions_3D()
-            sphIncl_intra.setLength(domain_size)
-            sphIncl_intra.fromHisto(
-                current_seed,
-                sac_de_billes.TypeAlgo.BOOL,
-                0.0,
-                intraRphi,
-                [intra_phase, intra_phase]  # Both populations → phase 1
-            )
-            multiInclusions_intra = merope.MultiInclusions_3D()
-            multiInclusions_intra.setInclusions(sphIncl_intra)
-            structure_intra = merope.Structure_3D(multiInclusions_intra)
-
-            # 3. Create Laguerre tessellation for grains
+            # 2. Create Laguerre tessellation for grains
             sphIncl_grains = merope.SphereInclusions_3D()
             sphIncl_grains.setLength(domain_size)
             sphIncl_grains.fromHisto(
-                current_seed,
+                seed,
                 sac_de_billes.TypeAlgo.RSA,
                 0.0,
-                [[lagR, lagPhi]],
-                [1]  # Temporary phase for Laguerre seeds
+                [lagRphi],
+                [1]  # Temporary phase
             )
             polyCrystal = merope.LaguerreTess_3D(domain_size, sphIncl_grains.getSpheres())
 
             multiInclusions_grains = merope.MultiInclusions_3D()
             multiInclusions_grains.setInclusions(polyCrystal)
 
-            # Add grain boundary layer (phase 3) and set grain cores to phase 1
+            # Add grain boundary layer (phase 3) and set cores to phase 1
             ids = multiInclusions_grains.getAllIdentifiers()
-            multiInclusions_grains.addLayer(ids, delta_phase, delta)  # Boundaries = phase 3
-            multiInclusions_grains.changePhase(ids, [1 for _ in ids])  # Cores = phase 1
+            multiInclusions_grains.addLayer(ids, delta_phase, delta)
+            multiInclusions_grains.changePhase(ids, [1 for _ in ids])
 
-            # 4. FIRST OVERLAY: inter-pores + grains+boundaries
-            # Remap: inter(2)→grains(0), boundaries(3)→grains(0)
-            # Result: where inter-pores exist, they stay as pores (phase 2)
-            dictionnaire1 = {inter_phase: grains_phase, delta_phase: grains_phase}
-            structure_inter_on_grains = merope.Structure_3D(
-                multiInclusions_inter,
-                multiInclusions_grains,
-                dictionnaire1
-            )
-
-            # 5. SECOND OVERLAY: intra-pores on top of everything
-            # No remap needed - intra-pores (phase 1) overlay on top and stay as phase 1
-            # Final result: phase 0=solid, phase 1=intra-pores, phase 2=inter-pores
+            # 3. SINGLE OVERLAY: pores on grains
+            dictionnaire = {incl_phase: grains_phase, delta_phase: grains_phase}
             structure = merope.Structure_3D(
-                structure_inter_on_grains,
-                structure_intra,
-                {}  # Empty dict = no remapping, intra wins where it exists
+                multiInclusions_pores,
+                multiInclusions_grains,
+                dictionnaire
             )
 
-            # 6. Voxellate
+            # 4. Voxellate
             with pm.cd(str(case_dir)):
                 fractions = builder.voxellate(structure, K_THERMAL)
 
-            # Phase 0 = grains+boundaries (solid), Phase 1 = intra, Phase 2 = inter+intra (merged)
+            # Extract phase fractions
             phi_solid = fractions.get(0, 0.0)
-            phi_intra = fractions.get(1, 0.0)
-            phi_inter = fractions.get(2, 0.0)
-            p_real = phi_intra + phi_inter  # Total porosity
+            phi_pores = fractions.get(2, 0.0)
+            p_real = phi_pores
 
-            print(f"   [Iter {iteration}] delta={delta:.3f}, interPhi={interPhi_input:.3f} -> solid={phi_solid:.3f}, intra={phi_intra:.3f}, inter={phi_inter:.3f}, tot={p_real:.3f} (tgt={p_target:.2f})")
+            print(f"   [Iter {iteration}] delta={delta:.2f}, inclPhi={inclPhi:.3f} -> pores={p_real:.4f} (target={p_target:.2f})")
 
-            # More tolerant convergence criterion: ±5% error acceptable
-            if abs(p_real - p_target) < 0.05:
-                print(f"   ✓ Converged within 5%")
+            # Check convergence (within 2% of target)
+            if abs(p_real - p_target) < 0.02:
+                print(f"   ✓ Converged!")
                 break
 
-            # Adjust inter-pore fraction to hit target porosity
+            # Adjust inclPhi for next iteration
             error = p_target - p_real
-            interPhi_input += error * 0.8  # Aggressive adjustment on inter-pores
-            interPhi_input = float(np.clip(interPhi_input, 0.01, 0.7))
-
-            # Also adjust intra slightly
-            intraRphi = [[0.05, p_target * 0.15], [0.15, p_target * 0.35 + error * 0.1]]
+            inclPhi += error * 0.7  # Moderate adjustment factor
+            inclPhi = float(np.clip(inclPhi, 0.01, 0.9))
 
         except RuntimeError as e:
-            # If RSA/BOOL fails, reduce pore fractions
-            print(f"   [Iter {iteration}] Sphere packing error: {e}")
-            interPhi_input *= 0.7
-            interPhi_input = max(0.01, interPhi_input)
-            intraRphi = [[0.05, max(0.01, p_target * 0.10)], [0.15, max(0.01, p_target * 0.25)]]
-            if iteration > 5:
+            print(f"   [Iter {iteration}] Packing failed: {e}")
+            inclPhi *= 0.8  # Reduce if packing fails
+            inclPhi = max(0.01, inclPhi)
+            if iteration > 6:
                 print(f"   ⚠ Accepting p_real={p_real:.4f} after {iteration} iterations")
                 break
 
-    # Run solver in the case directory
+    # Run solver
     with pm.cd(str(case_dir)):
         if no_solver:
             res = {"Kmean": 0.0}
         else:
-            res = solver.solve()  # Uses structure.vtk in CWD
+            res = solver.solve()
 
     k_eff = res["Kmean"]
-    print(f" [DONE] P={p_target:.2f} | delta={delta:.3f} | phi={p_real:.4f} -> K_eff={k_eff:.4f}")
+    print(f" [DONE] P_target={p_target:.2f} | delta={delta:.2f} | P_real={p_real:.4f} -> K_eff={k_eff:.4f}")
 
     return {
-        "Target_P":    p_target,
-        "Delta":       delta,
-        "Grain_R":     lagR,
-        "Real_P":      p_real,
-        "K_eff":       k_eff,
+        "Target_P": p_target,
+        "Delta": delta,
+        "Grain_R": LAG_R,
+        "Real_P": p_real,
+        "K_eff": k_eff,
     }
 
 
