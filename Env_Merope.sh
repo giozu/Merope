@@ -26,21 +26,26 @@ export PATH=$PATH:${SCRIPT_PATH}/scripts
 export PYTHONPATH=${SCRIPT_PATH}/tools/python/:$PYTHONPATH
 
 # 2) Source AMITEX-FFTP and/or TMFFT
-# AMITEX_FOLDER=/usr/lib/amitex_fft-v8.17.8
-AMITEX_FOLDER=/usr/lib/amitex_fftp-v8.17.14
-# amitex si scarica da internet, lo si copia e incolla in una cartella
-# poi si installa eseguendo ./install (prima si deve rendere eseguibile ./install e anche altre cose tipo)
-# # go into FoX and fix configure
-# cd /usr/lib/amitex_fftp-v8.17.14/lib_extern/FoX-4.1.2_modif2018
-# sudo chmod +x configure
+if [[ "${HOSTNAME}" == *"pleiades"* ]]
+then
+    release=$(lsb_release -c |awk '{print $2}')
+    processor=$(uname -m)
+    version=$release/$processor
+    ### use TMFFT
+    export LD_LIBRARY_PATH=/soft/pleiades/testing/BUILDS/PLEIADES-trunk/PREREQUIS/$version/BOOST/lib:$LD_LIBRARY_PATH
+    TMFFT_ENV=/soft/pleiades/testing/BUILDS/TMFFT/TMFFT-master/env.sh
+    source $TMFFT_ENV
 
-# # go back to the top-level dir and fix the clean scripts
-# cd /usr/lib/amitex_fftp-v8.17.14
-# sudo chmod +x clean_results.sh clean_results_PF.sh clean_all.sh
+    ### use amitex_fftp
+    AMITEX_ENV=/soft/pleiades/testing/BUILDS/AMITEX_FFTP/AMITEX_FFTP-11.0.1/env.sh
+else
+    # Local setup
+    AMITEX_FOLDER=/usr/lib/amitex_fftp-v8.17.14
+    export PATH=${AMITEX_FOLDER}/libAmitex/bin:$PATH
+    export LD_LIBRARY_PATH=${AMITEX_FOLDER}/libAmitex/src/materiauxK:$LD_LIBRARY_PATH
+    AMITEX_ENV=${AMITEX_FOLDER}/env_amitex.sh
+fi
 
-
-### use amitex_fftp
-export PATH=${AMITEX_FOLDER}/libAmitex/bin:$PATH
-export LD_LIBRARY_PATH=${AMITEX_FOLDER}/libAmitex/src/materiauxK:$LD_LIBRARY_PATH
-source ${AMITEX_FOLDER}/env_amitex.sh
+### use amitex_env
+source ${AMITEX_ENV}
 

@@ -164,6 +164,7 @@ Here, $c_i$ and $r_i$ can be seen as the center and radius of a sphere.
 **Main methods** :
 - `LaguerreTess_3D([L1,L2,L3], sphereList)` : constructor, build from a list of spheres.
 - `computeTessels()` : build the tessellation (for later purpose).
+- `toPolyInclusions()` : return an object of type `PolyInclusions_3D`, *forgetting* that a Laguerre tessellation paves the torus.
 - `setAspRatio([aspRatio1, aspRatio2, aspRatio3])` : set a uniform aspect ratio on the whole periodic cuboid (in practice, the tessellation is built on a dilatated periodic cuboid and then squeezed back to the initial periodic cuboid). Same convention as *Neper*.
   Mathematically speaking, it boils down to the pre-process transform :
   ```math
@@ -351,12 +352,12 @@ The user may appeal directly to Python functions to impose covariance and/or non
 Nevertheless, the mixture of Python, MKL and OpenMP does not work properly.
 Hence, the strategy is to wrap the lambda function into C function pointer which represents a function $\mathbb{R}^d \rightarrow \mathbb{\R}$, and to give this pointer to the Mérope classes.  
 
-This is performed by means of the `Interf_FuncPointer` class, using `Numba`. See [prescribedField.py](tests/microstructures/prescribedField/prescribedField.py) for an example.
+This is performed by means of the `Interf_FuncPointer` class, using `Numba`. See [prescribedField.py](/tests/microstructures/prescribedField/prescribedField.py) for an example.
 In the sequel, objects `Interf_FuncPointer` can be used as a wrapper for lambda functions.
 
 **Methods**
 - `Interf_FuncPointer(C_address, [d, 1])` represents a function $f :\mathbb{R}^{d} \rightarrow \mathbb{R}$. 
-Here, `C_address` is the pointer adress of a C function. (See the code here for obtaining such an address [prescribedField.py](tests/microstructures/prescribedField/prescribedField.py) via numba.)
+Here, `C_address` is the pointer adress of a C function. (See the code here for obtaining such an address [prescribedField.py](/tests/microstructures/prescribedField/prescribedField.py) via numba.)
 
 :warning: **The user should be very cautious** when defining `Interf_FuncPointer`. Since it relies on a raw pointer, it is a very fragile feature and may lead to undefined behaviour when used uncautiously.  
 
