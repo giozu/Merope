@@ -47,12 +47,11 @@ except ImportError as _import_err:
 
 
 # =============================================================================
-# CONFIGURATION – edit here
+# CONFIGURATION
 # =============================================================================
-L_DIM   = [15.0, 15.0, 15.0]    # RVE size [μm] (cubic). Increased to 15 to ensure L_RVE/R_pore > 20
-# Sphere radius / porosity sweep
-SPHERE_R  = 0.5                           # pore radius [same units as L_DIM]
-PHI_VALUES = np.linspace(0.05, 0.30, 12)  # porosity range to simulate
+L_DIM   = [10.0, 10.0, 10.0]              # RVE size [μm] (cubic). Increased to 15 to ensure L_RVE/R_pore > 20
+SPHERE_R  = 0.3                           # pore radius [same units as L_DIM]
+PHI_VALUES = np.linspace(0.01, 0.30, 20)  # porosity range to simulate
 
 SEED = 42  # Added back for repeatability
 
@@ -64,8 +63,9 @@ if SPHERE_R >= L_DIM[0] / 20.0:
         f"L_DIM={L_DIM[0]} (Must be < {L_DIM[0]/20.0})"
     )
 
-# Constraint 2: N_VOX_BASE ensures R_pore / L_vox > 2
-N_VOX_BASE = int(np.ceil(2.0 * L_DIM[0] / SPHERE_R))
+# Constraint 2: N_VOX_BASE ensures R_pore / L_vox > resolution
+resolution = 4.0
+N_VOX_BASE = int(np.ceil(resolution * L_DIM[0] / SPHERE_R))
 
 # Adaptive Resolution Settings
 ADAPTIVE_VOX   = True

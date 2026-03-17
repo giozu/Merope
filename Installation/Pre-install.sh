@@ -36,3 +36,4 @@ rm $VOROPP_NAME_DIR/src/CMakeLists.txt
 cp cmake/for_voropp/voropp_1.cmake $VOROPP_NAME_DIR/CMakeLists.txt
 cp cmake/for_voropp/voropp_2.cmake $VOROPP_NAME_DIR/src/CMakeLists.txt
 
+cd ..
