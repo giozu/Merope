@@ -1,3 +1,3 @@
 image_name,morphology,p_total,p_boundary,p_intra,n_boundary_pores,n_intra_pores,threshold_um2,um_per_pixel
-connected_79.png,interconnected,0.2233,0.1379,0.0854,10,248,80.0,0.195
-distributed_77.png,distributed,0.2267,0.0000,0.2267,0,2425,80.0,0.195
+connected_79.png,interconnected,0.1947,0.0311,0.1636,1,31,80.0,0.195
+distributed_77.png,distributed,0.1924,0.0131,0.1793,1,367,80.0,0.195
