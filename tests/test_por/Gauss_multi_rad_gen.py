@@ -25,7 +25,7 @@ from send2trash import send2trash
 # Voxel & Cell INPUTS #
 
 L = [10, 10, 10]
-n3D = 60
+n3D = 150
 
 # Amitex risolve 3 problemi FFT (uno per direzione x, y, z). Ogni problema ha una griglia di n3D³ = 216,000 voxel.
 # Con 300³ = 27,000,000 voxel ci ha messo ~14,000 secondi (vedi il 13957.2 nell'output prima del crash). Scalando linearmente con il numero di voxel:
@@ -205,13 +205,16 @@ go_to_dir(folder_name)
 os.makedirs(str(n3D), exist_ok=True)
 go_to_dir(str(n3D))
 porosity_computed = Crack_structure_Voxellation(n3D, L, seed, inclRphi, lagRphi, incl_phase, target_porosity, mean_radius, std_radius, num_radius, grains_phase, delta_phase, delta, voxel_rule, K, vtkname, fileCoeff)
-ThermalAmitex()
+#ThermalAmitex()
 
 # Salva risultati nel file aggregato
-matrice = [[float(x) for x in line.split()] for line in open("thermalCoeff_amitex.txt").readlines()]
-valori = [matrice[i][i] for i in range(3)]
 porosity_target = target_porosity  # target for intra-pores only (inter contribution hard to predict)
-salva_risultati(file_aggregato, valori, porosity_target, porosity_computed)
+try:
+    matrice = [[float(x) for x in line.split()] for line in open("thermalCoeff_amitex.txt").readlines()]
+    valori = [matrice[i][i] for i in range(3)]
+    salva_risultati(file_aggregato, valori, porosity_target, porosity_computed)
+except FileNotFoundError:
+    print(f"Amitex non eseguito. Por_target={porosity_target:.4f}, Por_computed={porosity_computed:.4f}")
 
 go_to_dir("../")
 

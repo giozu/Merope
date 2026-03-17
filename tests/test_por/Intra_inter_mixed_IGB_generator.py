@@ -25,7 +25,7 @@ from send2trash import send2trash
 # Voxel & Cell INPUTS #
 
 L = [10, 10, 10]
-n3D = 300
+n3D = 150
 seed = 0
 voxel_rule = merope.vox.VoxelRule.Average
 homogRule = merope.HomogenizationRule.Voigt  ## If i want to use homogRule, voxel_rule must be = merope.vox.VoxelRule.Average
@@ -33,7 +33,7 @@ homogRule = merope.HomogenizationRule.Voigt  ## If i want to use homogRule, voxe
 
 # Names of folders that will contain results #
 
-folder_name = 'Result' #nome della cartella che conterrà i risultati
+folder_name = 'Result_Intra_inter_mixed_IGB_generator' #nome della cartella che conterrà i risultati
 folder_path = os.path.join("/home/giovanni/Merope/tests/test_por/Ale_py_files", folder_name)
 
 if os.path.exists(folder_path):
@@ -159,9 +159,9 @@ def ThermalAmitex():
     amitex.computeThermalCoeff(voxellation_of_zones, number_of_processors)
     homogenized_matrix = amitex_out.printThermalCoeff(".")
     
-os.mkdir(folder_name)
+os.makedirs(folder_name, exist_ok=True)
 go_to_dir(folder_name)
-os.mkdir(str(n3D))
+os.makedirs(str(n3D), exist_ok=True)
 go_to_dir(str(n3D))
 Crack_structure_Voxellation(n3D, L, seed, inclRphi, lagRphi, incl_phase, grains_phase, delta_phase, delta, voxel_rule, K, vtkname, fileCoeff)
 #ThermalAmitex()
