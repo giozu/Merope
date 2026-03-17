@@ -461,6 +461,14 @@ def main() -> None:
         help="Number of 2D slices used for image comparison (default: 99).")
     parser.add_argument("--run-amitex", action="store_true",
         help="Run Amitex on the best geometry and report K_eff.")
+    parser.add_argument("--target-porosity", type=float, dest="target_porosity",
+        help="Override target porosity (defaults from pore_analysis.py: distributed=0.227, interconnected=0.138)")
+    parser.add_argument("--p-boundary", type=float, dest="p_boundary",
+        help="Boundary porosity from pore_analysis.py (for interconnected mode)")
+    parser.add_argument("--p-intra", type=float, dest="p_intra",
+        help="Intra-granular porosity from pore_analysis.py (for interconnected mode)")
+    parser.add_argument("--p-total", type=float, dest="p_total",
+        help="Total porosity from pore_analysis.py (for reference)")
     parser.add_argument(
         "--dist-type", choices=["lognormal", "gaussian"], default="lognormal",
         dest="dist_type",
@@ -479,7 +487,8 @@ def main() -> None:
 
     mode = args.mode
     exp_image = args.exp_image or _EXP_IMAGES.get(mode)
-    target_porosity = _TARGET_POROSITY.get(mode, 0.0)
+    # Use user-provided target porosity, or fall back to default
+    target_porosity = args.target_porosity if args.target_porosity is not None else _TARGET_POROSITY.get(mode, 0.0)
     n3d = args.n3d or (120 if mode == "distributed" else 150)
 
     # Calculate scale factors for morphology comparison (um per pixel)
