@@ -266,9 +266,12 @@ def _build_and_score_interconnected(
 ) -> float:
     """Generate an interconnected-porosity structure and return the average score.
 
+    Uses generate_delta_structure() which follows the CORRECT single-overlay pattern
+    from iter_delta_IGB_calc.py and run_keff_vs_delta.py.
+
     Parameters
     ----------
-    params  : dict with ``delta`` and ``inter_phi``.
+    params  : dict with ``delta``, ``pore_phi``, ``pore_radius``.
     fixed   : dict with all fixed parameters.
     """
     builder: MicrostructureBuilder = fixed["builder"]
@@ -278,18 +281,17 @@ def _build_and_score_interconnected(
     grid_size: int = fixed["grid_size"]
 
     delta        = float(params["delta"])
-    intra_phi    = float(params.get("intra_phi", fixed["intra_phi"]))
-    intra_radius = float(params.get("intra_radius", fixed["intra_radius"]))
+    pore_phi     = float(params.get("pore_phi", target_porosity))  # Use target as starting point
+    pore_radius  = float(params.get("pore_radius", fixed["pore_radius"]))
 
     try:
-        struct = builder.generate_interconnected_structure(
-            intra_radius=intra_radius,
-            intra_phi=intra_phi,
+        # Use the CORRECT pattern from run_keff_vs_delta.py
+        struct = builder.generate_delta_structure(
+            pore_radius=pore_radius,
+            pore_phi=pore_phi,
             grain_radius=fixed["grain_radius"],
             grain_phi=fixed["grain_phi"],
             delta=delta,
-            inter_radius=0.0,
-            inter_phi=0.0,
         )
 
         # Build grid and extract 3D array
@@ -304,7 +306,7 @@ def _build_and_score_interconnected(
         try:
             analyzer = merope.vox.GridAnalyzer_3D()
             fracs = analyzer.compute_percentages(grid)
-            phi_real = float(fracs.get(1, 0.0) + fracs.get(2, 0.0))
+            phi_real = float(fracs.get(2, 0.0))  # Only phase 2 = pores
         except Exception:
             phi_real = target_porosity  # fallback
 
@@ -326,7 +328,7 @@ def _build_and_score_interconnected(
         eval_res = evaluate_slices(
             array3d, exp_image,
             n_slices=n_slices, grid_size=grid_size, temp_dir=slices_dir,
-            real_um_per_px=fixed.get("real_um_per_px", 1.0), 
+            real_um_per_px=fixed.get("real_um_per_px", 1.0),
             sim_um_per_px=fixed.get("sim_um_per_px", 1.0)
         )
         avg_score = eval_res["average_score"]
@@ -368,10 +370,17 @@ def _make_space_distributed(dist_type: str = "lognormal") -> List:
 
 
 def _make_space_interconnected() -> List:
+    """Search space for interconnected mode using generate_delta_structure().
+
+    Parameters optimized:
+    - delta: grain boundary layer thickness
+    - pore_phi: target pore volume fraction (will be iteratively adjusted)
+    - pore_radius: radius of spherical pores
+    """
     return [
-        Real(1e-4, 0.15, name="delta"),          # slightly wider: best was at 0.10 limit
-        Real(0.05, 0.40, name="intra_phi"),       # narrowed around best (0.10-0.17 range)
-        Real(0.10, 1.20, name="intra_radius"),    # expanded upper bound to match large experimental pores
+        Real(0.39, 3.0, name="delta"),          # Match run_keff_vs_delta.py range
+        Real(0.05, 0.50, name="pore_phi"),      # Pore volume fraction
+        Real(0.20, 0.50, name="pore_radius"),   # Pore radius (match INCL_R=0.3 from run_keff_vs_delta.py)
     ]
 
 
@@ -543,23 +552,24 @@ def main() -> None:
             return -score          # gp_minimize minimises → negate
 
     else:  # interconnected
+        # Parameters matching run_keff_vs_delta.py
         fixed.update({
-            "inter_radius": 0.03,
-            "intra_radius": 0.10,
-            "intra_phi":    0.0,     # no intra-granular porosity per default
-            "grain_radius": 1.0,
-            "grain_phi":    1.0,
+            "pore_radius": 0.3,      # INCL_R from run_keff_vs_delta.py
+            "grain_radius": 3.0,     # LAG_R from run_keff_vs_delta.py
+            "grain_phi":    1.0,     # Fill entire RVE
         })
         space = _make_space_interconnected()
-        x0_guesses = [[0.08, 0.15, 0.35]] # starting point based on best known thesis configurations
+        # Initial guess: delta=1.0 (mid-range), pore_phi=target, pore_radius=0.3
+        x0_guesses = [[1.0, target_porosity, 0.3]]
 
         @use_named_args(space)
         def objective(**params):
-            intra = params.get("intra_phi", fixed["intra_phi"])
-            r_intra = params.get("intra_radius", fixed["intra_radius"])
-            print(f"\n[Call] delta={params['delta']:.5f}  "
-                  f"intra_phi={intra:.4f}  "
-                  f"intra_R={r_intra:.3f}")
+            delta = params["delta"]
+            pore_phi = params.get("pore_phi", target_porosity)
+            pore_r = params.get("pore_radius", fixed["pore_radius"])
+            print(f"\n[Call] delta={delta:.3f}  "
+                  f"pore_phi={pore_phi:.4f}  "
+                  f"pore_R={pore_r:.3f}")
             score = _build_and_score_interconnected(params, fixed, exp_image)
             return -score
 
@@ -634,14 +644,13 @@ def main() -> None:
             multi = builder.generate_spheres(radii_phi_list, phase_id=2)
             struct = merope.Structure_3D(multi)
         else:
-            struct = builder.generate_interconnected_structure(
-                intra_radius=best_params.get("intra_radius", fixed["intra_radius"]),
-                intra_phi=best_params.get("intra_phi", fixed["intra_phi"]),
+            # Use generate_delta_structure() for interconnected mode
+            struct = builder.generate_delta_structure(
+                pore_radius=best_params.get("pore_radius", fixed["pore_radius"]),
+                pore_phi=best_params.get("pore_phi", target_porosity),
                 grain_radius=fixed["grain_radius"],
                 grain_phi=fixed["grain_phi"],
                 delta=best_params["delta"],
-                inter_radius=0.0,
-                inter_phi=0.0,
             )
 
         best_vtk_dir = str(output_dir / "best_geometry")
@@ -661,8 +670,8 @@ def main() -> None:
                 # pores are in phase 2 only
                 phi_real = fracs.get(2, 0.0)
             else:
-                # interconnected: porosity from phases 1 and 2
-                phi_real = fracs.get(1, 0.0) + fracs.get(2, 0.0)
+                # interconnected: porosity only from phase 2 (generate_delta_structure pattern)
+                phi_real = fracs.get(2, 0.0)
 
             # Apply thermal coefficients and export VTK for Amitex
             grid.apply_homogRule(

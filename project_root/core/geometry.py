@@ -457,6 +457,95 @@ class MicrostructureBuilder:
 
         return final_struct
 
+    def generate_delta_structure(
+        self,
+        pore_radius: float,
+        pore_phi: float,
+        grain_radius: float,
+        grain_phi: float,
+        delta: float,
+    ) -> "merope.Structure_3D":
+        """Build a polycrystal with grain-boundary clipped pores (single overlay).
+
+        This matches the CORRECT pattern from iter_delta_IGB_calc.py and run_keff_vs_delta.py:
+        - Create pores (phase 2) as spheres
+        - Create Laguerre grains with boundary layer (phase 3)
+        - SINGLE overlay: {2:0, 3:0} → pores and boundaries both map to grains (0)
+
+        This is simpler and more physically correct than the double overlay pattern.
+
+        Parameters
+        ----------
+        pore_radius : float
+            Radius of spherical pores
+        pore_phi : float
+            Target volume fraction of pores (adjusted iteratively in caller)
+        grain_radius : float
+            Laguerre grain size
+        grain_phi : float
+            Should be 1.0 to fill RVE
+        delta : float
+            Grain boundary layer thickness
+
+        Returns
+        -------
+        merope.Structure_3D
+            Structure with phase 0=solid, phase 2=pores
+        """
+        import merope
+        import sac_de_billes
+
+        L = self.L
+        seed = int(self.seed)
+
+        # Phase IDs (same as iter_delta_IGB_calc.py)
+        incl_phase = 2      # Pores
+        delta_phase = 3     # Grain boundary layer (temporary)
+        grains_phase = 0    # Grains (final solid phase)
+
+        # 1. Create spherical pore inclusions (phase 2)
+        sphIncl_pores = merope.SphereInclusions_3D()
+        sphIncl_pores.setLength(L)
+        sphIncl_pores.fromHisto(
+            seed,
+            sac_de_billes.TypeAlgo.BOOL,
+            0.0,
+            [[float(pore_radius), float(pore_phi)]],
+            [incl_phase]
+        )
+        multiInclusions_pores = merope.MultiInclusions_3D()
+        multiInclusions_pores.setInclusions(sphIncl_pores)
+
+        # 2. Create Laguerre tessellation for grains
+        sphIncl_grains = merope.SphereInclusions_3D()
+        sphIncl_grains.setLength(L)
+        sphIncl_grains.fromHisto(
+            seed,
+            sac_de_billes.TypeAlgo.RSA,
+            0.0,
+            [[float(grain_radius), float(grain_phi)]],
+            [1]  # Temporary phase
+        )
+        polyCrystal = merope.LaguerreTess_3D(L, sphIncl_grains.getSpheres())
+
+        multiInclusions_grains = merope.MultiInclusions_3D()
+        multiInclusions_grains.setInclusions(polyCrystal)
+
+        # Add grain boundary layer (phase 3) and set cores to phase 1
+        ids = multiInclusions_grains.getAllIdentifiers()
+        multiInclusions_grains.addLayer(ids, delta_phase, float(delta))
+        multiInclusions_grains.changePhase(ids, [1 for _ in ids])
+
+        # 3. SINGLE OVERLAY: pores on grains
+        dictionnaire = {incl_phase: grains_phase, delta_phase: grains_phase}
+        structure = merope.Structure_3D(
+            multiInclusions_pores,
+            multiInclusions_grains,
+            dictionnaire
+        )
+
+        return structure
+
     # ------------------------------------------------------------------
     # Voxellation + homogenization
     # ------------------------------------------------------------------
