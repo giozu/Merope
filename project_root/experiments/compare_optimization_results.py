@@ -102,12 +102,12 @@ def main():
     print("  4. Classical Loeb model fails for interconnected morphology")
     print()
 
-    # Create comparison plot
+    # Create comparison plot with 2 subplots
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
     # Plot 1: Porosity composition
     ax = axes[0]
-    samples = ["Distributed\n77%", "Interconnected\n79%"]
+    samples = ["Distributed\n(77)", "Interconnected\n(79)"]
     boundary = [results["distributed_77"]["p_boundary"], results["connected_79"]["p_boundary"]]
     intra = [results["distributed_77"]["p_intra"], results["connected_79"]["p_intra"]]
 
@@ -126,7 +126,7 @@ def main():
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y*100:.0f}%'))
     ax.grid(axis='y', alpha=0.3)
 
-    # Plot 2: K_eff comparison
+    # Plot 2: K_eff comparison (bar chart)
     ax = axes[1]
     K_values = [K_distributed, K_interconnected]
     colors = ['#1f77b4', '#d62728']
@@ -153,9 +153,81 @@ def main():
                 fontsize=10, color='red', fontweight='bold',
                 ha='left', va='center')
 
+
     plt.tight_layout()
     plt.savefig('comparison_distributed_vs_interconnected.png', dpi=150, bbox_inches='tight')
+    plt.close(fig)
     print(f"✓ Comparison plot saved: comparison_distributed_vs_interconnected.png")
+    
+    # ========================================================================
+    # Create separate K_eff vs Porosity plot
+    # ========================================================================
+    fig2, ax2 = plt.subplots(figsize=(10, 7))
+    
+    # Generate porosity range
+    p_range = np.linspace(0.05, 0.35, 100)
+    
+    # Loeb model (distributed) - classical model
+    K_loeb = 1.0 * (1.0 - 1.37 * p_range)
+    ax2.plot(p_range, K_loeb, 'b-', linewidth=3, label='Loeb model', zorder=1)
+    
+    # Loeb × correction factor (interconnected) - same porosity as Loeb but with correction
+    K_corrected = []
+    for p_total in p_range:
+        # For interconnected: use total porosity but apply correction factor based on morphology
+        # Approximate p_boundary ≈ 0.6 * p_total (from experimental data)
+        p_b = 0.62 * p_total  # 13.8/22.3 ≈ 0.62
+        
+        # Correction factor parameters
+        k_min_i = -4.74 * p_b + 1.26
+        k_max_i = -0.15 * p_b + 1.00
+        b_i = -1.98 * p_b - 5.58
+        delta_c_i = -1.08 * p_b + 0.64
+        K_delta_i = k_min_i + (k_max_i - k_min_i) / (1.0 + np.exp(b_i * (delta - delta_c_i)))
+        
+        # Apply correction to Loeb model evaluated at total porosity
+        K_i = (1.0 - 1.37 * p_total) * K_delta_i
+        K_corrected.append(K_i)
+    
+    ax2.plot(p_range, K_corrected, 'r--', linewidth=3, 
+            label=f'Loeb × correction (δ*={delta:.2f})', zorder=1)
+    
+    # Plot experimental points - BOTH at total porosity
+    ax2.plot(results["distributed_77"]["p_total"], K_distributed, 
+            's', markersize=15, color='blue', markeredgecolor='black', 
+            markeredgewidth=2, label='Distributed (77)', zorder=3)
+    ax2.plot(results["connected_79"]["p_total"], K_interconnected, 
+            's', markersize=15, color='red', markeredgecolor='black', 
+            markeredgewidth=2, label='Interconnected (79)', zorder=3)
+    
+    # Add arrow showing the effect of morphology
+    p_inter = results["connected_79"]["p_total"]
+    K_loeb_at_p = 1.0 - 1.37 * p_inter
+    ax2.annotate('', xy=(p_inter, K_interconnected), xytext=(p_inter, K_loeb_at_p),
+                arrowprops=dict(arrowstyle='->', lw=2.5, color='red', linestyle='--'))
+    ax2.text(p_inter + 0.015, (K_loeb_at_p + K_interconnected)/2, 
+             f'{reduction:.0f}% reduction\ndue to morphology', 
+             fontsize=10, color='red', fontweight='bold', 
+             bbox=dict(boxstyle='round', facecolor='white', alpha=0.9))
+    
+    ax2.set_xlabel('Porosity (-)', fontsize=14)
+    ax2.set_ylabel('K$_{eff}$ (W/m·K)', fontsize=14)
+    ax2.set_title('Effective Thermal Conductivity vs Porosity', fontsize=16, fontweight='bold')
+    ax2.legend(loc='upper right', fontsize=11, framealpha=0.95)
+    ax2.grid(True, alpha=0.3, linestyle='--')
+    ax2.set_xlim([0.10, 0.30])
+    ax2.set_ylim([0.4, 1.0])
+    ax2.tick_params(axis='both', labelsize=12)
+    
+    # Add text annotation for Loeb model accuracy on distributed
+    loeb_error = abs(K_distributed - (1.0 - 1.37 * results["distributed_77"]["p_total"])) / K_distributed * 100
+    ax2.text(0.27, 0.92, f'K$_{{Loeb,error}}$ = {loeb_error:.1f}%', 
+             fontsize=12, color='blue', bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+    
+    plt.tight_layout()
+    plt.savefig('keff_vs_porosity_comparison.png', dpi=200, bbox_inches='tight')
+    plt.close(fig2)
+    print(f"✓ K_eff vs Porosity plot saved: keff_vs_porosity_comparison.png")
     print()
 
     print("=" * 70)
