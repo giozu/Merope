@@ -25,11 +25,19 @@ from send2trash import send2trash
 # Voxel & Cell INPUTS #
 
 L = [10, 10, 10]
-n3D = 300
+n3D = 60
+
+# Amitex risolve 3 problemi FFT (uno per direzione x, y, z). Ogni problema ha una griglia di n3D³ = 216,000 voxel.
+# Con 300³ = 27,000,000 voxel ci ha messo ~14,000 secondi (vedi il 13957.2 nell'output prima del crash). Scalando linearmente con il numero di voxel:
+# 14000 × (216000 / 27000000) ≈ 112 secondi
+# Con 1 processore invece di 2 potrebbe essere un po' più lento, ma con una griglia così piccola non dovrebbe fare gran differenza. Quindi stima: 2-3 minuti totali.
+
 seed = 0
 voxel_rule = merope.vox.VoxelRule.Average
 homogRule = merope.HomogenizationRule.Voigt  ## If i want to use homogRule, voxel_rule must be = merope.vox.VoxelRule.Average
 
+# Number of processors to use for Amitex
+n_proc = 2
 
 # Names of folders that will contain results #
 
@@ -148,7 +156,7 @@ def Crack_structure_Voxellation(n3D, L, seed, inclRphi, lagRphi, incl_phase, tar
     gridParameters = merope.vox.create_grid_parameters_N_L_3D([n3D,n3D,n3D], L)
     grid = merope.vox.GridRepresentation_3D(structure, gridParameters, voxel_rule)
     analyzer = merope.vox.GridAnalyzer_3D()
-    analyzer.compute_percentages(grid)
+    phases_fracts = analyzer.compute_percentages(grid)
     analyzer.print_percentages(grid)
     grid.apply_homogRule(homogRule, K)
     #allPhases = structure.getAllPhases()
@@ -156,22 +164,55 @@ def Crack_structure_Voxellation(n3D, L, seed, inclRphi, lagRphi, incl_phase, tar
     #my_printer.printVTK(grid, vtkname, nameValue = "Materialid")
     my_printer = merope.vox.vtk_printer_3D()
     my_printer.printVTK_segmented(grid, vtkname, fileCoeff, nameValue = "MaterialId")
+
+    # Phase 0 = solid (grains), Phase 2 = pores (inter + intra)
+    porosity_computed = phases_fracts.get(2, 0.0)
+    return porosity_computed
     
 
 ### function to calculate the thermal conductivity
 
 def ThermalAmitex():
-    number_of_processors = 2                   # for parallel computing
+    number_of_processors = n_proc                   # for parallel computing
     voxellation_of_zones = vtkname
     amitex.computeThermalCoeff(voxellation_of_zones, number_of_processors)
     homogenized_matrix = amitex_out.printThermalCoeff(".")
     
+def salva_risultati(file_aggregato, valori, porosity_target, porosity_computed):
+    if not os.path.exists(file_aggregato):
+        with open(file_aggregato, 'w') as f:
+            f.write("Input Parameters:\n")
+            f.write(f"Delta: {delta}\n")
+            f.write(f"size RVE: {L[0]}\n")
+            f.write(f"Inter-pore radius: {inclR}\n")
+            f.write(f"Inter-pore phi: {inclPhi}\n")
+            f.write(f"Intra-pore mean radius: {mean_radius} (std: {std_radius}, {num_radius} populations, Gaussian)\n")
+            f.write(f"Intra-pore target porosity: {target_porosity}\n")
+            f.write(f"Mean grains size (lagR): {lagR}\n")
+            f.write(f"NVoxel: {n3D}\n")
+            f.write(f"Kmatrix: {Kmatrix}\n")
+            f.write(f"Kgases: {Kgases}\n")
+            f.write("Por_target\tPor_computed\tSeed_index\tK_xx\tK_yy\tK_zz\tK_mean\n")
+    media = sum(valori) / len(valori)
+    with open(file_aggregato, 'a') as f:
+        f.write(f"{porosity_target:.4f}\t\t{porosity_computed:.4f}\t\t{seed}\t\t{valori[0]:.4f}\t\t{valori[1]:.4f}\t\t{valori[2]:.4f}\t\t{media:.4f}\n")
+
+os.makedirs(folder_path, exist_ok=True)
+file_aggregato = os.path.join(folder_path, "aggregated_results.txt")
+
 os.makedirs(folder_name, exist_ok=True)
 go_to_dir(folder_name)
 os.makedirs(str(n3D), exist_ok=True)
 go_to_dir(str(n3D))
-Crack_structure_Voxellation(n3D, L, seed, inclRphi, lagRphi, incl_phase, target_porosity, mean_radius, std_radius, num_radius, grains_phase, delta_phase, delta, voxel_rule, K, vtkname, fileCoeff)
+porosity_computed = Crack_structure_Voxellation(n3D, L, seed, inclRphi, lagRphi, incl_phase, target_porosity, mean_radius, std_radius, num_radius, grains_phase, delta_phase, delta, voxel_rule, K, vtkname, fileCoeff)
 ThermalAmitex()
+
+# Salva risultati nel file aggregato
+matrice = [[float(x) for x in line.split()] for line in open("thermalCoeff_amitex.txt").readlines()]
+valori = [matrice[i][i] for i in range(3)]
+porosity_target = target_porosity  # target for intra-pores only (inter contribution hard to predict)
+salva_risultati(file_aggregato, valori, porosity_target, porosity_computed)
+
 go_to_dir("../")
 
 
