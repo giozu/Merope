@@ -106,9 +106,10 @@ _EXP_IMAGES = {
 }
 
 # Physical porosity from experiments
+# Updated based on pore_analysis.py with stereological correction
 _TARGET_POROSITY = {
-    "distributed":    0.23,
-    "interconnected": 0.21,
+    "distributed":    0.227,  # distributed_77.png (corrected, 100% intra)
+    "interconnected": 0.138,  # connected_79.png (boundary only, corrected 13.8%)
 }
 
 
