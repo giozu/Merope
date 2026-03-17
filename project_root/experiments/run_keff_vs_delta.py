@@ -31,33 +31,29 @@ from core.utils import ProjectManager
 import merope
 import sac_de_billes
 
-# --- Configuration (matching iter_delta_IGB_calc.py) ---
+# --- Configuration ---
 L_DIM = [10.0, 10.0, 10.0]    # RVE size (physical units)
 N_VOX = 100  # Resolution (100^3 = 1M voxels)
 K_THERMAL = [1.0, 1.0, 1e-3]   # Phase 0=Solid, 1=Solid, 2=Pore
 
-# Parameters from iter_delta_IGB_calc.py
+# Parameters
 INCL_R = 0.3      # Pore radius (10x bigger than before!)
 LAG_R = 3.0       # Laguerre grain size (3x bigger than before!)
 LAG_PHI = 1.0     # Fill entire RVE
 
-# Delta range from iter_delta_IGB_calc.py: 0.39 to 3.0
-DELTA_VALUES = np.linspace(0.39, 3.0, 21)  # 21 points like reference
-# Porosity targets: three curves
+# Delta range
+DELTA_VALUES_1 = np.linspace(0.20, 0.36, 9)
+DELTA_VALUES_2 = np.linspace(0.39, 3.0, 21)
+DELTA_VALUES = np.concatenate([DELTA_VALUES_1, DELTA_VALUES_2])
+
+# Porosity targets
 P_TARGETS = [0.1, 0.2, 0.3]
-OUTPUT_DIR = Path("Results_Keff_vs_Delta")
+OUTPUT_DIR = _PROJECT_ROOT / "Results_Keff_vs_Delta"
 
 R_MIN = 0.5
-R_MAX = 4.0   
-
-def _grain_radius_for_phi(p: float, delta: float) -> float:
-    """Return grain radius so that GB layer phi ≈ p for given delta."""
-    # Empirical scaling for random polycrystals
-    r = 3.0 * delta / p
-    return float(np.clip(r, R_MIN, R_MAX))
+R_MAX = 4.0
 
 def worker(task_args):
-    """Worker function following EXACT pattern from iter_delta_IGB_calc.py"""
     p_target, delta, no_solver = task_args
 
     builder = MicrostructureBuilder(L=L_DIM, n3D=N_VOX, seed=42)
@@ -66,7 +62,7 @@ def worker(task_args):
 
     case_dir = OUTPUT_DIR / f"P_{p_target:.2f}_Delta_{delta:.3f}"
 
-    # Phase IDs (same as iter_delta_IGB_calc.py lines 82-84)
+    # Phase IDs
     incl_phase = 2      # Pores
     delta_phase = 3     # Grain boundary layer (temporary)
     grains_phase = 0    # Grains (final solid phase)
@@ -75,12 +71,13 @@ def worker(task_args):
     domain_size = L_DIM
     lagRphi = [LAG_R, LAG_PHI]
 
-    # Initial guess for inclPhi using pre-calculated array as starting point
-    a = [0.421, 0.3, 0.24, 0.201, 0.175, 0.157, 0.144, 0.134, 0.127, 0.121,
-         0.117, 0.1125, 0.11, 0.108, 0.105, 0.103, 0.101, 0.1, 0.099, 0.099, 0.099]
-    inclPhi_array = [p_target * 10 * x for x in a]
-    delta_idx = np.argmin(np.abs(DELTA_VALUES - delta))
-    inclPhi = inclPhi_array[delta_idx]
+    # Initial guess for inclPhi (adaptive formula based on delta)
+    # For small delta (crack-like), need higher inclPhi to reach target porosity
+    # For large delta (sphere-like), need lower inclPhi
+    # Empirical formula: inclPhi ~ p_target * (base + decay/delta)
+    base = 1.0
+    decay = 3.0
+    inclPhi = p_target * (base + decay / max(delta, 0.2))
 
     p_real = 0.0
 
@@ -178,20 +175,144 @@ def worker(task_args):
     }
 
 
-def run_sweeps(no_solver=False):
+def extract_results_from_folders():
+    """
+    Extract results from existing case folders and rebuild CSV.
+    Scans all P_X.XX_Delta_X.XXX folders and reads their results.
+    """
+    print(f"[EXTRACT] Scanning {OUTPUT_DIR} for existing case folders...")
+
+    if not OUTPUT_DIR.exists():
+        print(f"[EXTRACT] Output directory does not exist: {OUTPUT_DIR}")
+        return None
+
+    rows = []
+    case_dirs = sorted(OUTPUT_DIR.glob("P_*_Delta_*"))
+
+    for case_dir in case_dirs:
+        try:
+            # Parse folder name: P_0.10_Delta_0.390
+            folder_name = case_dir.name
+            parts = folder_name.split('_')
+            p_target = float(parts[1])
+            delta = float(parts[3])
+
+            # Read K_eff from thermalCoeff_amitex.txt
+            coeff_file = case_dir / "thermalCoeff_amitex.txt"
+            if not coeff_file.exists():
+                print(f"  [SKIP] {folder_name}: missing thermalCoeff_amitex.txt")
+                continue
+
+            with open(coeff_file, 'r') as f:
+                lines = f.readlines()
+                # Format: K_xx K_xy K_xz (first line)
+                k_values = lines[0].strip().split()
+                k_eff = float(k_values[0])  # K_xx
+
+            # Read Real_P from Coeffs.txt phase fractions
+            coeffs_file = case_dir / "Coeffs.txt"
+            p_real = p_target  # Default
+            if coeffs_file.exists():
+                with open(coeffs_file, 'r') as f:
+                    for line in f:
+                        if 'Phase 2' in line or 'phase 2' in line:
+                            # Try to extract porosity from phase fraction line
+                            parts = line.split()
+                            for i, part in enumerate(parts):
+                                try:
+                                    val = float(part)
+                                    if 0.0 < val < 1.0:  # Likely a fraction
+                                        p_real = val
+                                        break
+                                except:
+                                    continue
+
+            rows.append({
+                "Target_P": p_target,
+                "Delta": delta,
+                "Grain_R": 3.0,  # Default LAG_R
+                "Real_P": p_real,
+                "K_eff": k_eff,
+            })
+            print(f"  ✓ {folder_name}: K_eff={k_eff:.4f}, P_real={p_real:.4f}")
+
+        except Exception as e:
+            print(f"  [ERROR] {case_dir.name}: {e}")
+            continue
+
+    if not rows:
+        print("[EXTRACT] No valid results found")
+        return None
+
+    df = pd.DataFrame(rows)
+    df = df.sort_values(by=["Target_P", "Delta"]).reset_index(drop=True)
+
+    csv_path = OUTPUT_DIR / "keff_vs_delta.csv"
+    df.to_csv(csv_path, index=False)
+    print(f"\n[EXTRACT] ✓ Extracted {len(rows)} cases")
+    print(f"[EXTRACT] ✓ Saved to {csv_path}")
+
+    return df
+
+
+def run_sweeps(no_solver=False, recover=False):
     pm = ProjectManager()
-    pm.cleanup_folder(str(OUTPUT_DIR))
+
+    # Debug
+    print(f"[DEBUG run_sweeps] recover = {recover}")
+    print(f"[DEBUG run_sweeps] OUTPUT_DIR = {OUTPUT_DIR}")
+    csv_path = OUTPUT_DIR / "keff_vs_delta.csv"
+    print(f"[DEBUG run_sweeps] CSV path = {csv_path}")
+    print(f"[DEBUG run_sweeps] CSV exists = {csv_path.exists()}")
+
+    # IMPORTANT: Only cleanup if NOT recovering
+    if not recover:
+        pm.cleanup_folder(str(OUTPUT_DIR))
+
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    tasks = [(p, delta, no_solver) for p in P_TARGETS for delta in DELTA_VALUES]
-    print(f"=== K_eff vs Delta Sweep (Parallel, {len(tasks)} tasks, max_workers=4) ===")
+    # Load existing results if recovering
+    existing_df = None
+    if recover and (OUTPUT_DIR / "keff_vs_delta.csv").exists():
+        existing_df = pd.read_csv(OUTPUT_DIR / "keff_vs_delta.csv")
+        print(f"[RECOVER] Found {len(existing_df)} existing cases in CSV")
+    else:
+        print(f"[DEBUG] NOT loading CSV: recover={recover}, exists={csv_path.exists()}")
 
-    # ProcessPoolExecutor scales extremely well across heavy independent solvers like Amitex
+    # Generate all tasks
+    all_tasks = [(p, delta, no_solver) for p in P_TARGETS for delta in DELTA_VALUES]
+
+    # Filter out completed cases if recovering (use tolerance for float comparison)
+    if recover and existing_df is not None:
+        def is_completed(p, delta):
+            """Check if (p, delta) exists in existing_df with tolerance."""
+            match = existing_df[
+                (np.abs(existing_df["Target_P"] - p) < 1e-6) &
+                (np.abs(existing_df["Delta"] - delta) < 1e-6)
+            ]
+            return len(match) > 0
+
+        tasks = [t for t in all_tasks if not is_completed(t[0], t[1])]
+        print(f"[RECOVER] Skipping {len(all_tasks) - len(tasks)} completed cases")
+        print(f"[RECOVER] Running {len(tasks)} new cases")
+    else:
+        tasks = all_tasks
+
+    print(f"=== K_eff vs Delta Sweep ({len(tasks)} tasks) ===")
+
+    # Run only missing tasks
     rows = []
     for t in tasks:
         rows.append(worker(t))
 
-    df = pd.DataFrame(rows)
+    # Combine with existing data if recovering
+    if recover and existing_df is not None:
+        new_df = pd.DataFrame(rows)
+        df = pd.concat([existing_df, new_df], ignore_index=True)
+        print(f"[RECOVER] Combined {len(existing_df)} old + {len(new_df)} new = {len(df)} total cases")
+    else:
+        df = pd.DataFrame(rows)
+
     df = df.sort_values(by=["Target_P", "Delta"]).reset_index(drop=True)
     df.to_csv(OUTPUT_DIR / "keff_vs_delta.csv", index=False)
     return df
@@ -249,13 +370,29 @@ def plot_slide(df, output_dir):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--plot-only", action="store_true")
-    parser.add_argument("--no-solver", action="store_true")
+    parser.add_argument("--plot-only", action="store_true", help="Only regenerate plots from existing CSV")
+    parser.add_argument("--no-solver", action="store_true", help="Skip Amitex solver (geometry only)")
+    parser.add_argument("--recover", action="store_true", help="Resume from existing results (skip completed cases)")
+    parser.add_argument("--extract", action="store_true", help="Extract results from existing folders and rebuild CSV")
     args = parser.parse_args()
-    
-    if args.plot_only:
+
+    # Debug: print arguments
+    print(f"[DEBUG] args.recover = {args.recover}")
+    print(f"[DEBUG] args.no_solver = {args.no_solver}")
+    print(f"[DEBUG] args.plot_only = {args.plot_only}")
+    print(f"[DEBUG] args.extract = {args.extract}")
+
+    if args.extract:
+        # Extract mode: scan folders and rebuild CSV
+        df = extract_results_from_folders()
+        if df is None:
+            print("[ERROR] Failed to extract results")
+            sys.exit(1)
+    elif args.plot_only:
+        # Plot-only mode: read existing CSV
         df = pd.read_csv(OUTPUT_DIR / "keff_vs_delta.csv")
     else:
-        df = run_sweeps(args.no_solver)
-    
+        # Normal/recover mode: run simulations
+        df = run_sweeps(no_solver=args.no_solver, recover=args.recover)
+
     plot_slide(df, OUTPUT_DIR)

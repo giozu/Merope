@@ -379,7 +379,7 @@ def _make_space_interconnected() -> List:
     - pore_radius: radius of spherical pores
     """
     return [
-        Real(0.39, 3.0, name="delta"),          # Match run_keff_vs_delta.py range
+        Real(0.20, 3.0, name="delta"),          # Extended range: [0.2, 3.0] for highly interconnected structures
         Real(0.05, 0.50, name="pore_phi"),      # Pore volume fraction
         Real(0.20, 0.50, name="pore_radius"),   # Pore radius (match INCL_R=0.3 from run_keff_vs_delta.py)
     ]
