@@ -31,9 +31,9 @@ from core.utils import ProjectManager
 import merope
 import sac_de_billes
 
-# --- Configuration ---
+# --- Configuration (HIGH RESOLUTION for overnight run) ---
 L_DIM = [10.0, 10.0, 10.0]    # RVE size (physical units)
-N_VOX = 100  # Resolution (100^3 = 1M voxels)
+N_VOX = 200  # HIGH RESOLUTION: 200^3 = 8M voxels (was 100^3 = 1M)
 K_THERMAL = [1.0, 1.0, 1e-3]   # Phase 0=Solid, 1=Solid, 2=Pore
 
 # Parameters
@@ -81,8 +81,11 @@ def worker(task_args):
 
     p_real = 0.0
 
-    # Iterative convergence loop (max 10 iterations)
-    for iteration in range(10):
+    # HIGH RESOLUTION: Iterative convergence loop (max 20 iterations, tighter tolerance)
+    MAX_ITER = 20  # Increased from 10
+    TOLERANCE = 0.01  # ±1% (tighter than before)
+
+    for iteration in range(MAX_ITER):
         try:
             seed = 42 + iteration  # Change seed if packing fails
 
@@ -138,8 +141,8 @@ def worker(task_args):
 
             print(f"   [Iter {iteration}] delta={delta:.2f}, inclPhi={inclPhi:.3f} -> pores={p_real:.4f} (target={p_target:.2f})")
 
-            # Check convergence (within 2% of target)
-            if abs(p_real - p_target) < 0.02:
+            # Check convergence (using TOLERANCE = ±1%)
+            if abs(p_real - p_target) < TOLERANCE:
                 print(f"   ✓ Converged!")
                 break
 
@@ -152,7 +155,7 @@ def worker(task_args):
             print(f"   [Iter {iteration}] Packing failed: {e}")
             inclPhi *= 0.8  # Reduce if packing fails
             inclPhi = max(0.01, inclPhi)
-            if iteration > 6:
+            if iteration > 15:  # Increased from 6 to allow more attempts
                 print(f"   ⚠ Accepting p_real={p_real:.4f} after {iteration} iterations")
                 break
 
