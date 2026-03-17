@@ -21,6 +21,7 @@ import argparse
 # --- Constants ---
 ALPHA_LOEB = 1.37
 K_MATRIX = 1.0
+LAG_R = 3.0  # Grain radius used in run_keff_vs_delta.py for normalization
 
 def loeb_model(p, k_m=K_MATRIX, alpha=ALPHA_LOEB):
     """Classical Loeb model: K = k_m * (1 - alpha * p)."""
@@ -107,11 +108,12 @@ def fit_all(df, output_dir):
     
     fig, ax = plt.subplots(figsize=(8, 6))
     colors = {0.1: "steelblue", 0.2: "darkorange", 0.3: "forestgreen"}
-    
-    delta_fine = np.linspace(df["Delta"].min(), df["Delta"].max(), 200)
-    
+
+    # Normalize delta for plotting: delta* = delta / L_grain
+    delta_fine = np.linspace(df["Delta"].min() / LAG_R, df["Delta"].max() / LAG_R, 200)
+
     for p, group in df.groupby("Target_P"):
-        x = group["Delta"].values
+        x = group["Delta"].values / LAG_R  # Normalize: delta* = delta / L_grain
         y = group["K_eff"].values
         k_loeb = loeb_model(p)
         
@@ -142,7 +144,7 @@ def fit_all(df, output_dir):
         except Exception as e:
             print(f"Failed to fit p={p}: {e}")
 
-    ax.set_xlabel(r"$\delta$ (-)")
+    ax.set_xlabel(r"$\delta^* = \delta / L_{grain}$ (-)")
     ax.set_ylabel(r"$K_{eff}$ (W/m·K)")
     ax.set_title(r"Sigmoidal Fit: $K_{eff}$ vs $\delta$")
     ax.legend()
@@ -189,8 +191,8 @@ def plot_parameters(res_df, output_dir):
 def plot_contour(res_df, output_dir):
     """Generates the contour plot of K(p, delta)."""
     # Use the linear fits of parameters to extrapolate a surface
-    ps = np.linspace(0.05, 0.4, 50)
-    deltas = np.linspace(0.0, 1.0, 50)
+    ps = np.linspace(0.05, 0.3, 50)  # Limited to 0.3 max porosity
+    deltas = np.linspace(0.067, 1.0, 50)  # Normalized: delta* = delta/LAG_R, range [0.2/3, 3.0/3]
     P, D = np.meshgrid(ps, deltas)
     
     # Linear fits for each parameter
@@ -217,7 +219,7 @@ def plot_contour(res_df, output_dir):
     cp = ax.contourf(P, D, K, levels=20, cmap="viridis")
     fig.colorbar(cp, label=r"$K_{eff}(p, \delta)$")
     ax.set_xlabel("Porosity p")
-    ax.set_ylabel(r"Delta $\delta$")
+    ax.set_ylabel(r"$\delta^* = \delta / L_{grain}$ (-)")
     ax.set_title(r"Contour plot of $K(p, \delta)$")
     
     contour_path = output_dir / "K_eff_Contour.png"

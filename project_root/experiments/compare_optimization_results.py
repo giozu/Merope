@@ -42,9 +42,27 @@ def main():
     # Interconnected (with correction factor)
     p_b = results["connected_79"]["p_boundary"]
     p_i = results["connected_79"]["p_intra"]
-    delta = 1.0  # Placeholder - will be updated from optimization
 
-    # Correction factor parameters
+    # Read optimized delta from Results_Optimization_Interconnected/summary.txt
+    LAG_R = 3.0  # Grain radius for normalization
+    delta_abs = 0.390  # Default from previous optimization
+
+    summary_path = Path("Results_Optimization_Interconnected/summary.txt")
+    if summary_path.exists():
+        with open(summary_path, 'r') as f:
+            for line in f:
+                if "delta" in line.lower() and ":" in line:
+                    try:
+                        delta_abs = float(line.split(":")[1].strip())
+                        break
+                    except:
+                        pass
+
+    delta = delta_abs / LAG_R  # Normalize: delta* = delta / L_grain
+    print(f"Using delta = {delta_abs:.3f} (absolute) → delta* = {delta:.3f} (normalized)")
+    print()
+
+    # Correction factor parameters (fitted with normalized delta*)
     k_min = -4.74 * p_b + 1.26
     k_max = -0.15 * p_b + 1.00
     b = -1.98 * p_b - 5.58

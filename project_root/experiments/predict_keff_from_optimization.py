@@ -11,6 +11,9 @@ import sys
 import numpy as np
 from pathlib import Path
 
+# --- Constants ---
+LAG_R = 3.0  # Grain radius for delta normalization (must match run_keff_vs_delta.py)
+
 
 def loeb_model(p, k_matrix=1.0, alpha=1.37):
     """Classical Loeb model for distributed porosity."""
@@ -210,13 +213,15 @@ def main():
         # From pore_analysis.py on connected_79.png (with stereological correction)
         p_boundary = 0.138  # 13.8% (62% of total)
         p_intra = 0.085     # 8.5% (38% of total)
-        delta = params.get("delta", 1.0)
+        delta_abs = params.get("delta", 1.0)  # Absolute delta from optimization
+        delta = delta_abs / LAG_R  # Normalize: delta* = delta / L_grain
 
         print("Input parameters:")
         print(f"  p_boundary  = {p_boundary:.1%} (interconnected)")
         print(f"  p_intra     = {p_intra:.1%} (isolated)")
         print(f"  p_total     = {p_boundary + p_intra:.1%}")
-        print(f"  delta       = {delta:.3f}")
+        print(f"  delta (abs) = {delta_abs:.3f}")
+        print(f"  delta*      = {delta:.3f} (normalized by L_grain={LAG_R})")
         print()
 
         result = predict_interconnected(p_boundary, p_intra, delta)
@@ -273,7 +278,8 @@ def main():
         f.write(f"Date: 2025-03-17\n\n")
 
         if mode == "interconnected":
-            f.write(f"Optimized delta: {delta:.3f}\n")
+            f.write(f"Optimized delta: {delta_abs:.3f} (absolute)\n")
+            f.write(f"Normalized delta*: {delta:.3f} (delta/L_grain)\n")
             f.write(f"Boundary porosity: {p_boundary:.1%}\n")
             f.write(f"Intra porosity: {p_intra:.1%}\n")
             f.write(f"Total porosity: {p_boundary + p_intra:.1%}\n\n")
