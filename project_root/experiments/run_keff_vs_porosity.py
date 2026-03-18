@@ -313,6 +313,8 @@ def run_simulations(output_dir: Path, no_solver: bool = False) -> pd.DataFrame:
 
 # =============================================================================
 # PLOTTING
+# =============================================================================
+
 def plot_results(df: pd.DataFrame, output_dir: Path) -> None:
     """Professional 4-panel canvas including error analysis & Voigt/Reuss limits."""
 

@@ -31,27 +31,24 @@ from core.utils import ProjectManager
 import merope
 import sac_de_billes
 
-# --- Configuration (HIGH RESOLUTION for overnight run) ---
-L_DIM = [10.0, 10.0, 10.0]    # RVE size (physical units)
-N_VOX = 200  # HIGH RESOLUTION: 200^3 = 8M voxels (was 100^3 = 1M)
+# --- Configuration ---
+L_DIM = [10.0, 10.0, 10.0]     # RVE size (physical units)
+N_VOX = 200  # Increased from 150 for p=30% (R_pore/l_vox = 6.0)
 K_THERMAL = [1.0, 1.0, 1e-3]   # Phase 0=Solid, 1=Solid, 2=Pore
 
 # Parameters
-INCL_R = 0.3      # Pore radius (10x bigger than before!)
-LAG_R = 3.0       # Laguerre grain size (3x bigger than before!)
+INCL_R = 0.3      # Pore radius
+LAG_R = 3.0       # Laguerre grain size
 LAG_PHI = 1.0     # Fill entire RVE
 
 # Delta range
-DELTA_VALUES_1 = np.linspace(0.20, 0.36, 9)
-DELTA_VALUES_2 = np.linspace(0.39, 3.0, 21)
-DELTA_VALUES = np.concatenate([DELTA_VALUES_1, DELTA_VALUES_2])
+DELTA_VALUES = [0.2, 0.5, 0.8]
+# DELTA_VALUES_2 = np.linspace(0.39, 3.0, 21)
+# DELTA_VALUES = np.concatenate([DELTA_VALUES_1, DELTA_VALUES_2])
 
 # Porosity targets
-P_TARGETS = [0.1, 0.2, 0.3]
+P_TARGETS = [0.3]
 OUTPUT_DIR = _PROJECT_ROOT / "Results_Keff_vs_Delta"
-
-R_MIN = 0.5
-R_MAX = 4.0
 
 def worker(task_args):
     p_target, delta, no_solver = task_args
@@ -78,10 +75,11 @@ def worker(task_args):
     base = 1.0
     decay = 3.0
     inclPhi = p_target * (base + decay / max(delta, 0.2))
+    inclPhi = float(np.clip(inclPhi, 0.01, 0.85))  # Clamp to valid range immediately
 
     p_real = 0.0
 
-    # HIGH RESOLUTION: Iterative convergence loop (max 20 iterations, tighter tolerance)
+    # Iterative convergence loop (max 20 iterations, tighter tolerance)
     MAX_ITER = 20  # Increased from 10
     TOLERANCE = 0.01  # ±1% (tighter than before)
 
@@ -117,7 +115,7 @@ def worker(task_args):
             multiInclusions_grains = merope.MultiInclusions_3D()
             multiInclusions_grains.setInclusions(polyCrystal)
 
-            # Add grain boundary layer (phase 3) and set cores to phase 1
+            # Add grain-boundary layer (phase 3) and set cores to phase 1
             ids = multiInclusions_grains.getAllIdentifiers()
             multiInclusions_grains.addLayer(ids, delta_phase, delta)
             multiInclusions_grains.changePhase(ids, [1 for _ in ids])
@@ -177,7 +175,6 @@ def worker(task_args):
         "K_eff": k_eff,
     }
 
-
 def extract_results_from_folders():
     """
     Extract results from existing case folders and rebuild CSV.
@@ -233,7 +230,7 @@ def extract_results_from_folders():
             rows.append({
                 "Target_P": p_target,
                 "Delta": delta,
-                "Grain_R": 3.0,  # Default LAG_R
+                "Grain_R": LAG_R,
                 "Real_P": p_real,
                 "K_eff": k_eff,
             })
@@ -257,18 +254,11 @@ def extract_results_from_folders():
 
     return df
 
-
 def run_sweeps(no_solver=False, recover=False):
     pm = ProjectManager()
-
-    # Debug
-    print(f"[DEBUG run_sweeps] recover = {recover}")
-    print(f"[DEBUG run_sweeps] OUTPUT_DIR = {OUTPUT_DIR}")
     csv_path = OUTPUT_DIR / "keff_vs_delta.csv"
-    print(f"[DEBUG run_sweeps] CSV path = {csv_path}")
-    print(f"[DEBUG run_sweeps] CSV exists = {csv_path.exists()}")
 
-    # IMPORTANT: Only cleanup if NOT recovering
+    # Only cleanup if NOT recovering
     if not recover:
         pm.cleanup_folder(str(OUTPUT_DIR))
 
@@ -378,12 +368,6 @@ if __name__ == "__main__":
     parser.add_argument("--recover", action="store_true", help="Resume from existing results (skip completed cases)")
     parser.add_argument("--extract", action="store_true", help="Extract results from existing folders and rebuild CSV")
     args = parser.parse_args()
-
-    # Debug: print arguments
-    print(f"[DEBUG] args.recover = {args.recover}")
-    print(f"[DEBUG] args.no_solver = {args.no_solver}")
-    print(f"[DEBUG] args.plot_only = {args.plot_only}")
-    print(f"[DEBUG] args.extract = {args.extract}")
 
     if args.extract:
         # Extract mode: scan folders and rebuild CSV
