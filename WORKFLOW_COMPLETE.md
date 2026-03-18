@@ -13,7 +13,7 @@ This document describes the complete workflow for analyzing experimental microst
 **Connected morphology (connected_79.png):**
 ```bash
 python project_root/core/pore_analysis.py \
-  "Optimization_3D_structure/EXP IMG/connected_79.png" \
+  "Optimization_3D_structure/exp_img/connected_79.png" \
   0.195 80
 ```
 
@@ -25,7 +25,7 @@ python project_root/core/pore_analysis.py \
 **Distributed morphology (distributed_77.png):**
 ```bash
 python project_root/core/pore_analysis.py \
-  "Optimization_3D_structure/EXP IMG/distributed_77.png" \
+  "Optimization_3D_structure/exp_img/distributed_77.png" \
   0.195 80
 ```
 
@@ -45,7 +45,7 @@ python project_root/core/pore_analysis.py \
 ```bash
 python project_root/experiments/run_optimization.py \
   --mode interconnected \
-  --exp-image "Optimization_3D_structure/EXP IMG/connected_79.png" \
+  --exp-image "Optimization_3D_structure/exp_img/connected_79.png" \
   --n-calls 50 \
   --n3d 120
 ```
@@ -74,7 +74,7 @@ python project_root/experiments/run_optimization.py \
 ```bash
 python project_root/experiments/run_optimization.py \
   --mode distributed \
-  --exp-image "Optimization_3D_structure/EXP IMG/distributed_77.png" \
+  --exp-image "Optimization_3D_structure/exp_img/distributed_77.png" \
   --n-calls 50 \
   --n3d 120
 ```

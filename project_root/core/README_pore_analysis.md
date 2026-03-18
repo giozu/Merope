@@ -355,7 +355,7 @@ print(f"Predicted K_eff: {K_eff:.3f} W/m·K")
 
 ```bash
 python core/pore_analysis.py \
-  "Optimization_3D_structure/EXP IMG/connected_79.png" \
+  "Optimization_3D_structure/exp_img/connected_79.png" \
   0.195 \
   80
 ```
@@ -406,7 +406,7 @@ K_eff = 0.39 × (1 - 1.37 × 0.100) = 0.34 W/m·K
 
 ```bash
 python core/pore_analysis.py \
-  "Optimization_3D_structure/EXP IMG/distributed_77.png" \
+  "Optimization_3D_structure/exp_img/distributed_77.png" \
   0.195
 ```
 

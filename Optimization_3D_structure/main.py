@@ -105,9 +105,9 @@ space = [
 
 
 # Experimental images
-experimental_images = [os.path.join(base_path, "EXP IMG", "exp_interconnect_1.png")]
+experimental_images = [os.path.join(base_path, "exp_img", "exp_interconnect_1.png")]
 
-#experimental_images = [os.path.join(base_path, "EXP IMG", "exp_distrib_1.png")]
+#experimental_images = [os.path.join(base_path, "exp_img", "exp_distrib_1.png")]
 
 x0 = [[np.log(0.7), 0.03]]  # ad esempio
 y0 = [-evaluate_simulation({"mean_radius": np.log(0.7), "std_radius": 0.03, "delta1": fixed_params["delta1"]}, fixed_params, experimental_images)["average_score"]]

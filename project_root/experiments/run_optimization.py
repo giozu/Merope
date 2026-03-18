@@ -98,7 +98,7 @@ from core.statistics import evaluate_slices, plot_area_distribution
 # ---------------------------------------------------------------------------
 # Experimental image paths (defaults)
 # ---------------------------------------------------------------------------
-_EXP_BASE = Path("/home/giovanni/Merope/Optimization_3D_structure/EXP IMG")
+_EXP_BASE = Path("/home/giovanni/Merope/Optimization_3D_structure/exp_img")
 _EXP_IMAGES = {
     "distributed":    str(_EXP_BASE / "slice_test_distributed.png"),
     # "interconnected": str(_EXP_BASE / "exp_interconnect_1.png"),

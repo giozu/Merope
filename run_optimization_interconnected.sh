@@ -35,7 +35,7 @@ echo ""
 # Pass all porosity values from CSV
 python project_root/experiments/run_optimization.py \
   --mode interconnected \
-  --exp-image "Optimization_3D_structure/EXP IMG/connected_79.png" \
+  --exp-image "Optimization_3D_structure/exp_img/connected_79.png" \
   --target-porosity ${P_BOUNDARY} \
   --p-total ${P_TOTAL} \
   --p-boundary ${P_BOUNDARY} \

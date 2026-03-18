@@ -75,7 +75,7 @@ variable_params = {
 
 # Experimental images
 experimental_images = [
-    os.path.join(base_path, "EXP IMG", "exp_interconnect_1.png")
+    os.path.join(base_path, "exp_img", "exp_interconnect_1.png")
 ]
 
 

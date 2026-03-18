@@ -70,9 +70,9 @@ TARGET_FITNESS = 0.8
 
 # Experimental imagines paths
 experimental_images = [
-    os.path.join(base_path, "EXP IMG", "exp_interconnect_1.png")
+    os.path.join(base_path, "exp_img", "exp_interconnect_1.png")
     # can add further exp img:
-    # os.path.join(base_path, "EXP IMG", "exp_interconnect_2.png")
+    # os.path.join(base_path, "exp_img", "exp_interconnect_2.png")
 ]
 
 ##############################################
