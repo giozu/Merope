@@ -33,28 +33,26 @@ import sac_de_billes
 
 # --- Configuration ---
 L_DIM = [10.0, 10.0, 10.0]     # RVE size (physical units)
-N_VOX = 200  # Increased from 150 for p=30% (R_pore/l_vox = 6.0)
+N_VOX = 100
 K_THERMAL = [1.0, 1.0, 1e-3]   # Phase 0=Solid, 1=Solid, 2=Pore
 
 # Parameters
 INCL_R = 0.3      # Pore radius
-LAG_R = 3.0       # Laguerre grain size
+LAG_R = 1.0       # Laguerre grain size
 LAG_PHI = 1.0     # Fill entire RVE
 
 # Delta range
 DELTA_VALUES = [0.2, 0.5, 0.8]
-# DELTA_VALUES_2 = np.linspace(0.39, 3.0, 21)
-# DELTA_VALUES = np.concatenate([DELTA_VALUES_1, DELTA_VALUES_2])
 
 # Porosity targets
-P_TARGETS = [0.3]
-OUTPUT_DIR = _PROJECT_ROOT / "Results_Keff_vs_Delta"
+P_TARGETS = [0.1, 0.2, 0.3]
+OUTPUT_DIR = Path("Results_Keff_vs_Delta")
 
 def worker(task_args):
     p_target, delta, no_solver = task_args
 
     builder = MicrostructureBuilder(L=L_DIM, n3D=N_VOX, seed=42)
-    solver = ThermalSolver(n_cpus=1)
+    solver = ThermalSolver(n_cpus=12)
     pm = ProjectManager()
 
     case_dir = OUTPUT_DIR / f"P_{p_target:.2f}_Delta_{delta:.3f}"
@@ -80,7 +78,7 @@ def worker(task_args):
     p_real = 0.0
 
     # Iterative convergence loop (max 20 iterations, tighter tolerance)
-    MAX_ITER = 20  # Increased from 10
+    MAX_ITER = 20
     TOLERANCE = 0.01  # ±1% (tighter than before)
 
     for iteration in range(MAX_ITER):
