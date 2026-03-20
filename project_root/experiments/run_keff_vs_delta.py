@@ -413,8 +413,16 @@ def plot_slide(df, output_dir):
         except Exception as e:
             print(f"  [fit warning p={p}] {e}")
 
-    ax.set_xlabel(r"delta", fontsize=12)
-    ax.set_ylabel(r"k [W/mK]", fontsize=12)
+    # Geometric limit: vertical lines at delta_crit for each P_target
+    for p in sorted(df["Target_P"].unique()):
+        delta_crit = LAG_R * (1 - (1 - p)**(1/3))
+        col = colors.get(p, "black")
+        ax.axvline(delta_crit, color=col, linestyle=":", linewidth=1.2, alpha=0.6)
+        ax.text(delta_crit + 0.01, 0.98, rf"$\delta_{{crit}}^{{p={p:.1f}}}$",
+                color=col, fontsize=8, va="top", transform=ax.get_xaxis_transform())
+
+    ax.set_xlabel(r"$\delta$", fontsize=12)
+    ax.set_ylabel(r"$K_{eff}$ [W/mK]", fontsize=12)
     ax.set_title(r"$K_\mathrm{eff}$ vs $\delta$ — crack-to-sphere transition", fontsize=13)
     ax.grid(True, linestyle="--", alpha=0.4, color="grey")
     ax.set_xlim(0, df["Delta"].max() * 1.05)
