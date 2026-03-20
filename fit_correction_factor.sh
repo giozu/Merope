@@ -6,7 +6,7 @@ set -e  # Exit on error
 # conda activate merope
 
 # Extract results
-python3 project_root/experiments/run_keff_vs_delta.py --extract
+# python3 project_root/experiments/run_keff_vs_delta.py --extract
 
 # Change directory
 cd project_root

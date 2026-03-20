@@ -278,12 +278,13 @@ def main():
     elif args.csv:
         df = pd.read_csv(args.csv)
     else:
-        # Fallback to recovery from standard location
-        sim_dir = Path("Results_Keff_vs_Delta")
-        if sim_dir.exists():
-            df = recover_from_results(sim_dir)
+        # Default: load CSV from standard location
+        csv_path = Path("../Results_Keff_vs_Delta") / "keff_vs_delta.csv"
+        if csv_path.exists():
+            df = pd.read_csv(csv_path)
+            print(f"Loaded {len(df)} points from {csv_path}")
         else:
-            print("No data found. Use --synthetic, provide --csv, or run run_keff_vs_delta.py first.")
+            print(f"No data found at {csv_path}. Use --synthetic, provide --csv, or run run_keff_vs_delta.py first.")
             return
 
     if df.empty:
