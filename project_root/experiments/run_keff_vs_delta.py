@@ -32,11 +32,11 @@ import sac_de_billes
 
 # --- Configuration ---
 L_DIM = [10.0, 10.0, 10.0]     # RVE size (physical units)
-N_VOX = 250
+N_VOX = 200
 K_THERMAL = [1.0, 1.0, 1e-3]   # Phase 0=Solid, 1=Solid, 2=Pore
 
 # Parameters
-INCL_R = 0.3      # Pore radius
+INCL_R = 0.15     # Pore radius
 LAG_R = 1.0       # Laguerre grain size
 LAG_PHI = 1.0     # Fill entire RVE
 
@@ -48,7 +48,7 @@ P_TARGETS = [0.1, 0.2, 0.3]
 OUTPUT_DIR = Path("Results_Keff_vs_Delta")
 
 # N_CPUS
-N_CPUS = 12
+N_CPUS = 2
 
 def worker(task_args):
     p_target, delta, no_solver = task_args
