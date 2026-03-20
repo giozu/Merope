@@ -15,7 +15,6 @@ import argparse
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import concurrent.futures
 from scipy.optimize import curve_fit
 
 # Ensure project_root/ is on sys.path so `core` is importable
@@ -33,7 +32,7 @@ import sac_de_billes
 
 # --- Configuration ---
 L_DIM = [10.0, 10.0, 10.0]     # RVE size (physical units)
-N_VOX = 100
+N_VOX = 250
 K_THERMAL = [1.0, 1.0, 1e-3]   # Phase 0=Solid, 1=Solid, 2=Pore
 
 # Parameters
@@ -42,17 +41,20 @@ LAG_R = 1.0       # Laguerre grain size
 LAG_PHI = 1.0     # Fill entire RVE
 
 # Delta range
-DELTA_VALUES = [0.2, 0.5, 0.8]
+DELTA_VALUES = [0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.5, 0.6, 0.7, 0.8]
 
 # Porosity targets
 P_TARGETS = [0.1, 0.2, 0.3]
 OUTPUT_DIR = Path("Results_Keff_vs_Delta")
 
+# N_CPUS
+N_CPUS = 12
+
 def worker(task_args):
     p_target, delta, no_solver = task_args
 
     builder = MicrostructureBuilder(L=L_DIM, n3D=N_VOX, seed=42)
-    solver = ThermalSolver(n_cpus=12)
+    solver = ThermalSolver(n_cpus=N_CPUS)
     pm = ProjectManager()
 
     case_dir = OUTPUT_DIR / f"P_{p_target:.2f}_Delta_{delta:.3f}"
@@ -131,7 +133,6 @@ def worker(task_args):
                 fractions = builder.voxellate(structure, K_THERMAL)
 
             # Extract phase fractions
-            phi_solid = fractions.get(0, 0.0)
             phi_pores = fractions.get(2, 0.0)
             p_real = phi_pores
 
@@ -252,6 +253,73 @@ def extract_results_from_folders():
 
     return df
 
+def solve_existing_cases():
+    """Run Amitex solver on all existing case folders that have structure.vtk."""
+    print(f"[AMITEX] Scanning {OUTPUT_DIR} for existing geometries...")
+
+    if not OUTPUT_DIR.exists():
+        print(f"[AMITEX] Output directory does not exist: {OUTPUT_DIR}")
+        return None
+
+    solver = ThermalSolver(n_cpus=N_CPUS)
+    pm = ProjectManager()
+    rows = []
+
+    case_dirs = sorted(OUTPUT_DIR.glob("P_*_Delta_*"))
+    for case_dir in case_dirs:
+        vtk_file = case_dir / "structure.vtk"
+        if not vtk_file.exists():
+            print(f"  [SKIP] {case_dir.name}: no structure.vtk")
+            continue
+
+        # Parse folder name: P_0.10_Delta_0.390
+        parts = case_dir.name.split('_')
+        p_target = float(parts[1])
+        delta = float(parts[3])
+
+        print(f"  Solving {case_dir.name}...")
+        with pm.cd(str(case_dir)):
+            res = solver.solve()
+
+        k_eff = res["Kmean"]
+
+        # Read real porosity from Coeffs.txt if available
+        p_real = p_target
+        coeffs_file = case_dir / "Coeffs.txt"
+        if coeffs_file.exists():
+            with open(coeffs_file, 'r') as f:
+                for line in f:
+                    if 'Phase 2' in line or 'phase 2' in line:
+                        for part in line.split():
+                            try:
+                                val = float(part)
+                                if 0.0 < val < 1.0:
+                                    p_real = val
+                                    break
+                            except ValueError:
+                                continue
+
+        print(f"  [DONE] {case_dir.name}: K_eff={k_eff:.4f}")
+        rows.append({
+            "Target_P": p_target,
+            "Delta": delta,
+            "Grain_R": LAG_R,
+            "Real_P": p_real,
+            "K_eff": k_eff,
+        })
+
+    if not rows:
+        print("[SOLVE-ONLY] No valid cases found")
+        return None
+
+    df = pd.DataFrame(rows)
+    df = df.sort_values(by=["Target_P", "Delta"]).reset_index(drop=True)
+    csv_path = OUTPUT_DIR / "keff_vs_delta.csv"
+    df.to_csv(csv_path, index=False)
+    print(f"\n[SOLVE-ONLY] Solved {len(rows)} cases, saved to {csv_path}")
+    return df
+
+
 def run_sweeps(no_solver=False, recover=False):
     pm = ProjectManager()
     csv_path = OUTPUT_DIR / "keff_vs_delta.csv"
@@ -365,9 +433,15 @@ if __name__ == "__main__":
     parser.add_argument("--no-solver", action="store_true", help="Skip Amitex solver (geometry only)")
     parser.add_argument("--recover", action="store_true", help="Resume from existing results (skip completed cases)")
     parser.add_argument("--extract", action="store_true", help="Extract results from existing folders and rebuild CSV")
+    parser.add_argument("--amitex", action="store_true", help="Run Amitex solver on existing geometry (skip generation)")
     args = parser.parse_args()
 
-    if args.extract:
+    if args.amitex:
+        df = solve_existing_cases()
+        if df is None:
+            print("[ERROR] No cases solved")
+            sys.exit(1)
+    elif args.extract:
         # Extract mode: scan folders and rebuild CSV
         df = extract_results_from_folders()
         if df is None:
