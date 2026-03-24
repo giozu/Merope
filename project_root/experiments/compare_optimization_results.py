@@ -7,8 +7,71 @@ Usage:
 """
 
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
+import sys
+
+# Import pore_analysis to run analysis directly
+sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
+from pore_analysis import analyze_porosity
+
+
+def load_pore_data(sample_name):
+    """Load pore analysis data by running pore_analysis.py.
+
+    Args:
+        sample_name: Name of the sample (e.g., 'distributed_77', 'connected_79')
+
+    Returns:
+        Dictionary with porosity statistics
+    """
+    image_path = Path(f"Optimization_3D_structure/exp_img/{sample_name}.png")
+
+    if not image_path.exists():
+        print(f"Error: {image_path} not found!")
+        sys.exit(1)
+
+    # Run pore analysis directly
+    print(f"  Analyzing {sample_name}...", end=" ", flush=True)
+    result = analyze_porosity(
+        image_path=str(image_path),
+        um_per_pixel=0.195,
+        circularity_threshold=0.50,
+        export_csv=False,  # CSV already exists
+        show_plots=False,
+    )
+    print("✓")
+
+    # Use results as-is from pore_analysis (geometric classification)
+    p_total = result['p_total']
+    p_boundary = result['p_inter']
+    p_intra = result['p_intra']
+    n_total = result['n_total']
+    n_boundary = result['n_inter']
+    n_intra = result['n_intra']
+
+    # Determine morphology based on AREA fraction of inter pores (not count)
+    # Use boundary porosity as fraction of total porosity
+    inter_area_fraction = p_boundary / p_total if p_total > 0 else 0
+
+    if inter_area_fraction < 0.30:  # Less than 30% area is inter → mostly isolated
+        morphology = "Mostly isolated"
+    elif inter_area_fraction > 0.70:  # More than 70% area is inter → interconnected
+        morphology = "Interconnected network"
+    else:
+        morphology = "Mixed morphology"
+
+    return {
+        "p_total": p_total,
+        "p_boundary": p_boundary,
+        "p_intra": p_intra,
+        "n_pores": n_total,
+        "n_boundary": n_boundary,
+        "n_intra": n_intra,
+        "morphology": morphology,
+        "inter_area_fraction": inter_area_fraction,
+    }
 
 
 def main():
@@ -17,23 +80,13 @@ def main():
     print("=" * 70)
     print()
 
-    # Expected results from pore_analysis.py (with stereological correction)
+    # Load data by running pore_analysis.py
+    print("Running pore analysis on experimental images...")
     results = {
-        "distributed_77": {
-            "p_total": 0.227,
-            "p_boundary": 0.000,
-            "p_intra": 0.227,
-            "n_pores": 2425,
-            "morphology": "Isolated spheres",
-        },
-        "connected_79": {
-            "p_total": 0.223,
-            "p_boundary": 0.138,
-            "p_intra": 0.085,
-            "n_pores": 258,
-            "morphology": "Interconnected network",
-        },
+        "distributed_77": load_pore_data("distributed_77"),
+        "connected_79": load_pore_data("connected_79"),
     }
+    print()
 
     # Predict K_eff
     # Distributed (classical Loeb)
@@ -96,10 +149,15 @@ def main():
     print()
 
     print("KEY FINDINGS:")
-    print("  1. Both samples have ~22-23% porosity (similar)")
-    print(f"  2. K_eff differs by {reduction:.0f}% due to morphology alone")
-    print("  3. Interconnected pores have 2-3× stronger impact than isolated pores")
-    print("  4. Classical Loeb model fails for interconnected morphology")
+    p_dist = results["distributed_77"]["p_total"]
+    p_conn = results["connected_79"]["p_total"]
+    inter_frac_dist = results["distributed_77"]["inter_area_fraction"]
+    inter_frac_conn = results["connected_79"]["inter_area_fraction"]
+    print(f"  1. Total porosity: {p_dist:.1%} (distributed) vs {p_conn:.1%} (interconnected)")
+    print(f"  2. Inter pore area fraction: {inter_frac_dist:.1%} vs {inter_frac_conn:.1%}")
+    print(f"  3. K_eff differs by {reduction:.0f}% despite different porosity levels")
+    print(f"  4. Morphology (inter pore connectivity) is the dominant factor")
+    print("  5. Classical Loeb model fails for interconnected morphology")
     print()
 
     # Create comparison plot with 2 subplots

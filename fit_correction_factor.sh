@@ -8,12 +8,10 @@ set -e  # Exit on error
 # Extract results
 # python3 project_root/experiments/run_keff_vs_delta.py --extract
 
-# Change directory
-cd project_root
-
-# Fit correction factor
-python experiments/fit_correction_factor.py
+# Fit correction factor (output to Merope/Results_Sigmoidal_Fit)
+python3 project_root/experiments/fit_correction_factor.py \
+    --csv Results_Keff_vs_Delta/keff_vs_delta.csv \
+    --output-dir Results_Sigmoidal_Fit
 
 # Compare optimization results
-cd ..
 python3 project_root/experiments/compare_optimization_results.py
