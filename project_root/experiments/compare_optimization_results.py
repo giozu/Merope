@@ -33,12 +33,15 @@ def load_pore_data(sample_name):
         sys.exit(1)
 
     # Run pore analysis directly
+    # Use same parameters as run_pore_analysis.sh for consistency
     print(f"  Analyzing {sample_name}...", end=" ", flush=True)
     result = analyze_porosity(
         image_path=str(image_path),
         um_per_pixel=0.195,
         circularity_threshold=0.50,
-        export_csv=False,  # CSV already exists
+        min_area_um2=0.5,  # Same as run_pore_analysis.sh
+        stereology_factor=1.0,  # Delesse principle (area fraction = volume fraction)
+        export_csv=False,
         show_plots=False,
     )
     print("✓")
@@ -229,20 +232,23 @@ def main():
     K_loeb = 1.0 * (1.0 - 1.37 * p_range)
     ax2.plot(p_range, K_loeb, 'b-', linewidth=3, label='Loeb model', zorder=1)
     
-    # Loeb × correction factor (interconnected) - same porosity as Loeb but with correction
+    # Loeb × correction factor (interconnected)
+    # Use actual ratio from connected_79 data
+    actual_inter_fraction = results["connected_79"]["inter_area_fraction"]
+
     K_corrected = []
     for p_total in p_range:
-        # For interconnected: use total porosity but apply correction factor based on morphology
-        # Approximate p_boundary ≈ 0.6 * p_total (from experimental data)
-        p_b = 0.62 * p_total  # 13.8/22.3 ≈ 0.62
-        
+        # For interconnected: apply correction based on inter pore fraction
+        # Use actual fraction from connected_79 as representative
+        p_b = p_total * actual_inter_fraction
+
         # Correction factor parameters
         k_min_i = -4.74 * p_b + 1.26
         k_max_i = -0.15 * p_b + 1.00
         b_i = -1.98 * p_b - 5.58
         delta_c_i = -1.08 * p_b + 0.64
         K_delta_i = k_min_i + (k_max_i - k_min_i) / (1.0 + np.exp(b_i * (delta - delta_c_i)))
-        
+
         # Apply correction to Loeb model evaluated at total porosity
         K_i = (1.0 - 1.37 * p_total) * K_delta_i
         K_corrected.append(K_i)
@@ -273,8 +279,8 @@ def main():
     ax2.set_title('Effective Thermal Conductivity vs Porosity', fontsize=16, fontweight='bold')
     ax2.legend(loc='upper right', fontsize=11, framealpha=0.95)
     ax2.grid(True, alpha=0.3, linestyle='--')
-    ax2.set_xlim([0.10, 0.30])
-    ax2.set_ylim([0.4, 1.0])
+    # ax2.set_xlim([0.10, 0.30])
+    # ax2.set_ylim([0.4, 1.0])
     ax2.tick_params(axis='both', labelsize=12)
     
     # Add text annotation for Loeb model accuracy on distributed
