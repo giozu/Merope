@@ -566,52 +566,6 @@ def _make_diagnostic_plot(result: Dict, image_path: str, output_dir: Optional[st
     print(f"Diagnostic plot saved → {plot_path}")
     plt.close()
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# SENSITIVITY ANALYSIS  (replaces the old calibrate_area_threshold)
-# ─────────────────────────────────────────────────────────────────────────────
-
-def sensitivity_analysis(
-    image_path: str,
-    um_per_pixel: float,
-    circularity_thresholds: Tuple[float, ...] = (0.3, 0.4, 0.5, 0.6, 0.7),
-    **kwargs,
-) -> None:
-    """
-    Run analyze_porosity with multiple circularity thresholds and print a
-    comparison table.  Use this to choose the right threshold for your material.
-
-    A good threshold is where p_total is stable across thresholds (it should be,
-    since total porosity doesn't depend on the classification) while the
-    intra/inter split changes meaningfully — look for where the numbers match
-    your physical understanding of the sample.
-    """
-    print(f"\nSensitivity to circularity threshold — {Path(image_path).name}")
-    print(f"{'─'*72}")
-    hdr = f"{'circ_thr':>10} {'p_total':>10} {'p_intra':>10} {'p_inter':>10} "
-    hdr += f"{'n_intra':>8} {'n_inter':>8} {'ECD_intra':>10} {'ECD_inter':>10}"
-    print(hdr)
-    print(f"{'─'*72}")
-
-    for ct in circularity_thresholds:
-        r = analyze_porosity(
-            image_path, um_per_pixel,
-            circularity_threshold=ct,
-            show_plots=False, export_csv=False,
-            **kwargs,
-        )
-        print(
-            f"{ct:>10.2f} {r['p_total']:>10.2%} {r['p_intra']:>10.2%} "
-            f"{r['p_inter']:>10.2%} {r['n_intra']:>8} {r['n_inter']:>8} "
-            f"{r['mean_ecd_intra_um']:>10.1f} {r['mean_ecd_inter_um']:>10.1f}"
-        )
-    print(f"{'─'*72}")
-    print(
-        "Note: p_total should be roughly constant across rows.\n"
-        "Choose the circularity threshold that best matches your SEM observations.\n"
-    )
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # CLI ENTRY POINT
 # ─────────────────────────────────────────────────────────────────────────────
@@ -665,11 +619,6 @@ if __name__ == "__main__":
     no_watershed   = "--no-watershed" in sys.argv
     export_csv     = "--export-csv"   in sys.argv
     show_plots     = "--plot"         in sys.argv
-    do_sensitivity = "--sensitivity"  in sys.argv
-
-    if do_sensitivity:
-        sensitivity_analysis(image_path, um_per_pixel)
-        sys.exit(0)
 
     result = analyze_porosity(
         image_path,

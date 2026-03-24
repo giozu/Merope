@@ -248,11 +248,18 @@ MIN_AREA_UM2=2.0
 bash run_pore_analysis.sh
 ```
 
-### Example 2: Find optimal threshold
+### Example 2: Find optimal threshold (Sensitivity Analysis)
 ```bash
+# Run sensitivity analysis to test multiple thresholds
 python project_root/core/pore_analysis.py sample.png 0.195 --sensitivity
-# Review output, choose stable threshold, update CIRCULARITY_THR
+
+# Or run the detailed example script
+python example_sensitivity_analysis.py
+
+# Review output, choose stable threshold, update CIRCULARITY_THR in run_pore_analysis.sh
 ```
+
+**See [SENSITIVITY_ANALYSIS_GUIDE.md](SENSITIVITY_ANALYSIS_GUIDE.md) for complete tutorial**
 
 ### Example 3: Images with uneven lighting
 ```bash
