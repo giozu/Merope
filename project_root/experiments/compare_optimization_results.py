@@ -100,8 +100,22 @@ def main():
     p_i = results["connected_79"]["p_intra"]
 
     # Read optimized delta from Results_Optimization_Interconnected/summary.txt
-    LAG_R = 3.0  # Grain radius for normalization
+    # and LAG_R from Results_Keff_vs_Delta/keff_vs_delta.csv
     delta_abs = 0.390  # Default from previous optimization
+    LAG_R = 1.0  # Default grain radius
+
+    # Read LAG_R from keff_vs_delta.csv
+    csv_path = Path("Results_Keff_vs_Delta/keff_vs_delta.csv")
+    if csv_path.exists():
+        try:
+            df_lagr = pd.read_csv(csv_path)
+            if "Grain_R" in df_lagr.columns:
+                LAG_R = df_lagr["Grain_R"].iloc[0]
+                print(f"Read L_grain = {LAG_R} from {csv_path}")
+        except Exception as e:
+            print(f"Warning: Could not read Grain_R from CSV: {e}")
+    else:
+        print(f"Warning: {csv_path} not found, using default L_grain = {LAG_R}")
 
     summary_path = Path("Results_Optimization_Interconnected/summary.txt")
     if summary_path.exists():
@@ -115,7 +129,7 @@ def main():
                         pass
 
     delta = delta_abs / LAG_R  # Normalize: delta* = delta / L_grain
-    print(f"Using delta = {delta_abs:.3f} (absolute) → delta* = {delta:.3f} (normalized)")
+    print(f"Using delta = {delta_abs:.3f} (absolute) → delta* = {delta:.3f} (normalized with L_grain={LAG_R})")
     print()
 
     # Correction factor parameters (fitted with normalized delta*)

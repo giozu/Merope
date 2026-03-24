@@ -21,7 +21,7 @@ import argparse
 # --- Constants ---
 ALPHA_LOEB = 1.37
 K_MATRIX = 1.0
-LAG_R = 3.0  # Grain radius used in run_keff_vs_delta.py for normalization
+# LAG_R will be read from CSV data
 
 def loeb_model(p, k_m=K_MATRIX, alpha=ALPHA_LOEB):
     """Classical Loeb model: K = k_m * (1 - alpha * p)."""
@@ -105,7 +105,15 @@ def recover_from_results(results_dir):
 def fit_all(df, output_dir):
     """Fits the sigmoidal model to each porosity group."""
     results = []
-    
+
+    # Read LAG_R from CSV data (should be consistent across all rows)
+    if "Grain_R" in df.columns:
+        LAG_R = df["Grain_R"].iloc[0]
+        print(f"Using L_grain = {LAG_R} from CSV data")
+    else:
+        LAG_R = 1.0  # Default fallback
+        print(f"Warning: Grain_R not found in CSV, using default L_grain = {LAG_R}")
+
     fig, ax = plt.subplots(figsize=(8, 6))
     colors = {0.1: "steelblue", 0.2: "darkorange", 0.3: "forestgreen"}
 
@@ -188,11 +196,12 @@ def plot_parameters(res_df, output_dir):
     plt.close(fig)
     print(f"Saved parameter analysis to {param_plot_path}")
 
-def plot_contour(res_df, output_dir):
+def plot_contour(res_df, output_dir, LAG_R=1.0):
     """Generates the contour plot of K(p, delta)."""
     # Use the linear fits of parameters to extrapolate a surface
     ps = np.linspace(0.05, 0.3, 50)  # Limited to 0.3 max porosity
-    deltas = np.linspace(0.067, 1.0, 50)  # Normalized: delta* = delta/LAG_R, range [0.2/3, 3.0/3]
+    # Normalized delta* range: adjust based on actual LAG_R
+    deltas = np.linspace(0.1, 1.0, 50)  # Normalized: delta* = delta/LAG_R
     P, D = np.meshgrid(ps, deltas)
     
     # Linear fits for each parameter
@@ -293,8 +302,10 @@ def main():
 
     res_df = fit_all(df, out_dir)
     if not res_df.empty:
+        # Extract LAG_R from data
+        LAG_R = df["Grain_R"].iloc[0] if "Grain_R" in df.columns else 1.0
         plot_parameters(res_df, out_dir)
-        plot_contour(res_df, out_dir)
+        plot_contour(res_df, out_dir, LAG_R=LAG_R)
         res_df.to_csv(out_dir / "fitted_parameters.csv", index=False)
         print(f"\nResults saved to {out_dir}")
 
