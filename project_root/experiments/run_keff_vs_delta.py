@@ -41,7 +41,7 @@ LAG_R = 1.0       # Laguerre grain size
 LAG_PHI = 1.0     # Fill entire RVE
 
 # Delta range
-DELTA_VALUES = [0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.5, 0.6, 0.7, 0.8]
+DELTA_VALUES = [0.15, 0.175, 0.2, 0.225, 0.25, 0.275, 0.3, 0.325, 0.35, 0.375, 0.4, 0.5, 0.6, 0.7, 0.8]
 
 # Porosity targets
 P_TARGETS = [0.1, 0.2, 0.3]
