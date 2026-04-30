@@ -105,6 +105,34 @@ Per `context/03_paper_and_open_issues.md` §6:
 - Delete the rest.
 - **Keep** `~/Merope/Optimization_3D_structure/exp_img/` (top-level, not `old_files/`) — `run_optimization.py` reads its SEM images.
 
+### 4.3 Decide what to track from `Results_*/` in git
+
+Current state (audited 2026-04-30): six `Results_*` folders exist at top-level, totalling ~355 MB. None are git-tracked, and only `DeltaScan_Results` (a legacy unrelated name) appears in `.gitignore`. So these folders are in limbo: not staged, not ignored.
+
+| Folder | Size | What it contains | Recommendation |
+|---|---|---|---|
+| `Results_Keff_vs_Delta/` | 232 KB | `keff_vs_delta.csv` + per-case `P_*_Delta_*/thermalCoeff_amitex.txt` | Track everything (small) |
+| `Results_Keff_vs_Porosity/` | 336 MB | `keff_vs_porosity.csv` + per-case `Phi_*_Nvox_*/{structure.vtk,Coeffs.txt,...}` | Track CSV + `Keff_Validation_Summary.png` only; gitignore per-case dirs (the `.vtk` files are the bulk) |
+| `Results_Optimization_Distributed/` | 8.8 MB | `summary.txt`, `convergence.png`, `area_distribution.png`, `best_slice.png`, `best_geometry/structure.vtk`, `final_slices/`, `work/` | Track top-level files; gitignore `work/` and `final_slices/`; possibly track `best_geometry/structure.vtk` if reasonable size, otherwise skip |
+| `Results_Optimization_Interconnected/` | 8.7 MB | Same structure | Same recommendation |
+| `Results_Sigmoidal_Fit/` | 604 KB | `fitted_parameters.csv`, 3 PNGs | Track everything |
+| `Results_Sigmoidal_Fit_Joint/` | 588 KB | New joint-fit outputs | Track everything |
+
+**Action items:**
+1. Decide the policy: track summaries/CSVs/headline figures, gitignore per-case `.vtk` and intermediate `work/` directories.
+2. Add appropriate `.gitignore` patterns. Suggested:
+   ```
+   Results_Keff_vs_Porosity/Phi_*_Nvox_*/
+   Results_Keff_vs_Delta/P_*_Delta_*/
+   Results_Optimization_*/work/
+   Results_Optimization_*/final_slices/
+   Results_Optimization_*/best_geometry/structure.vtk
+   ```
+3. `git add` the surviving CSVs, summaries, and PNGs.
+4. Consider archiving the bulky `.vtk` files separately (e.g., a Zenodo data deposit linked from the paper) if reproducibility requires them.
+
+**Why this matters for the paper:** the per-case `.vtk` files are the AMITEX inputs/outputs — 95 % of the mass in the Results dirs is them. They're regenerable from the scripts in `project_root/experiments/`, so tracking them in git is wasteful. Tracking the CSVs + summary PNGs gives a co-author or reviewer enough to inspect numbers without bloating the repo.
+
 ## Phase 5 — submission (separate session)
 
 Once Phases 1-4 are done, start fresh: a co-author review pass, journal-specific formatting (Elsevier `cas-sc.cls` if J. Nucl. Mat. has changed templates since the elsarticle preprint we're using), and the cover letter.
