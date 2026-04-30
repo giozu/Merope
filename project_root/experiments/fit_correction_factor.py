@@ -1,8 +1,23 @@
 """
 fit_correction_factor.py
 ========================
-Implements the sigmoidal fitting for the delta-based correction factor K_delta(p, delta)
-as shown in the slide.
+
+DEPRECATED for the paper-canonical fit.
+--------------------------------------
+This script fits the sigmoidal K_delta independently at each porosity level
+and *then* regresses the four parameters linearly against p. With sparse
+sampling at low delta the per-p fit becomes under-determined: K_min hits its
+lower bound (zero) for porosities where the crack-dominated plateau was never
+sampled, and the downstream linear regression breaks.
+
+For the paper, use ``fit_correction_factor_joint.py`` instead -- it imposes
+the linear-in-p structure directly during fitting (8 free parameters across
+all p), which removes the degeneracy.
+
+This script is kept for benchmarking the per-p fit against the joint fit
+and as an independent sanity check on the linear-in-p assumption. The lower
+bound on K_min has been raised from 0 to 0.05 to prevent the fully
+degenerate fit; do not lower it.
 
 Model:
     K_eff(p, delta) = K_Loeb(p) * K_delta(p, delta)
@@ -130,8 +145,10 @@ def fit_all(df, output_dir):
         
         # Initial guess: k_min, k_max, b (negative!), delta_c
         p0 = [0.2, 1.0, -3.0, 1.0] # k_min < k_max, b < 0 for correct transition
-        # Bounds: k_min >= 0, k_max <= 1.1, b < 0, delta_c in [0, 4]
-        bounds = ([0.0, 0.8, -20.0, 0.0], [0.95, 1.1, -0.5, 4.0])
+        # Bounds: k_min >= 0.05 (positive floor; 0 lets the fit go degenerate
+        # when the low-delta plateau is unsampled), k_max <= 1.1, b < 0,
+        # delta_c in [0, 4].
+        bounds = ([0.05, 0.8, -20.0, 0.0], [0.95, 1.1, -0.5, 4.0])
         try:
             popt, _ = curve_fit(sigmoidal_correction, x, y_corr, p0=p0, bounds=bounds, maxfev=10000)
             k_min, k_max, b, delta_c = popt

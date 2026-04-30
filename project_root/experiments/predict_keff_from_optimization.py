@@ -7,12 +7,39 @@ Usage:
     python predict_keff_from_optimization.py Results_Optimization_Distributed
 """
 
+import csv
 import sys
-import numpy as np
+from datetime import date
 from pathlib import Path
+
+import numpy as np
 
 # --- Constants ---
 LAG_R = 3.0  # Grain radius for delta normalization (must match run_keff_vs_delta.py)
+DEFAULT_COEFFS_PATH = Path("Results_Sigmoidal_Fit/linear_coeffs.csv")
+
+
+def load_sigmoid_coeffs(path=DEFAULT_COEFFS_PATH):
+    """Load (slope, intercept) for k_min, k_max, b, delta_c from the joint-fit CSV.
+
+    The CSV is produced by fit_correction_factor_joint.py and has columns
+    ``param, slope, intercept``. Returns ``{param: [slope, intercept]}``.
+    """
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Linear coefficients not found at {path}. "
+            "Run fit_correction_factor_joint.py first to generate it."
+        )
+    coeffs = {}
+    with open(path) as f:
+        for row in csv.DictReader(f):
+            coeffs[row["param"]] = [float(row["slope"]), float(row["intercept"])]
+    expected = {"k_min", "k_max", "b", "delta_c"}
+    missing = expected - set(coeffs)
+    if missing:
+        raise ValueError(f"{path} is missing rows for: {sorted(missing)}")
+    return coeffs
 
 
 def loeb_model(p, k_matrix=1.0, alpha=1.37):
@@ -39,7 +66,7 @@ def sigmoid_correction(delta, p, k_min_coeff, k_max_coeff, b_coeff, delta_c_coef
     return max(0.0, K_delta)
 
 
-def predict_interconnected(p_boundary, p_intra, delta):
+def predict_interconnected(p_boundary, p_intra, delta, coeffs=None):
     """
     Predict K_eff for interconnected morphology.
 
@@ -51,21 +78,22 @@ def predict_interconnected(p_boundary, p_intra, delta):
         Intra-granular porosity (from pore_analysis)
     delta : float
         Grain boundary thickness (optimized parameter)
+    coeffs : dict, optional
+        Linear coefficients ``{param: [slope, intercept]}`` for the sigmoid
+        parameters. If ``None``, loads from
+        ``Results_Sigmoidal_Fit/linear_coeffs.csv`` (joint-fit output).
 
     Returns
     -------
     dict with K_eff prediction and breakdown
     """
-    # Fitted parameters from run_keff_vs_delta.py
-    # k_min(p) = -4.74*p + 1.26
-    # k_max(p) = -0.15*p + 1.00
-    # b(p) = -1.98*p - 5.58
-    # δ_c(p) = -1.08*p + 0.64
+    if coeffs is None:
+        coeffs = load_sigmoid_coeffs()
 
-    k_min_coeff = [-4.74, 1.26]
-    k_max_coeff = [-0.15, 1.00]
-    b_coeff = [-1.98, -5.58]
-    delta_c_coeff = [-1.08, 0.64]
+    k_min_coeff = coeffs["k_min"]
+    k_max_coeff = coeffs["k_max"]
+    b_coeff = coeffs["b"]
+    delta_c_coeff = coeffs["delta_c"]
 
     # Step 1: Loeb model for boundary porosity
     K_loeb_boundary = loeb_model(p_boundary)
@@ -275,7 +303,7 @@ def main():
         f.write("K_eff PREDICTION\n")
         f.write("=" * 50 + "\n\n")
         f.write(f"Mode: {mode}\n")
-        f.write(f"Date: 2025-03-17\n\n")
+        f.write(f"Date: {date.today().isoformat()}\n\n")
 
         if mode == "interconnected":
             f.write(f"Optimized delta: {delta_abs:.3f} (absolute)\n")

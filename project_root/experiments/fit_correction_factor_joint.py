@@ -44,7 +44,7 @@ Usage
     cd ~/Merope
     python project_root/experiments/fit_correction_factor_joint.py \
         --csv Results_Keff_vs_Delta/keff_vs_delta.csv \
-        --output-dir Results_Sigmoidal_Fit_Joint
+        --output-dir Results_Sigmoidal_Fit
 """
 
 from __future__ import annotations
@@ -174,7 +174,7 @@ def plot_fits(df, coeffs, output_dir, lag_r=1.0):
     ax.set_title("Joint sigmoidal fit (linear-in-p parameters)")
     ax.grid(alpha=0.3)
     ax.legend(fontsize=9)
-    out = output_dir / "Sigmoidal_Fits_Joint.png"
+    out = output_dir / "Sigmoidal_Fits.png"
     fig.savefig(out, dpi=300)
     plt.close(fig)
     return out
@@ -197,7 +197,7 @@ def plot_parameters(per_p, coeffs, output_dir):
         ax.legend(loc="best", fontsize=9)
         ax.grid(alpha=0.3)
     fig.tight_layout()
-    out = output_dir / "Parameters_vs_Porosity_Joint.png"
+    out = output_dir / "Parameters_vs_Porosity.png"
     fig.savefig(out, dpi=300)
     plt.close(fig)
     return out
@@ -220,7 +220,7 @@ def plot_contour(coeffs, output_dir):
     ax.set_xlabel("Porosity p")
     ax.set_ylabel(r"$\delta^* = \delta/L_{grain}$")
     ax.set_title("Joint-fit contour")
-    out = output_dir / "K_eff_Contour_Joint.png"
+    out = output_dir / "K_eff_Contour.png"
     fig.savefig(out, dpi=300)
     plt.close(fig)
     return out
@@ -229,7 +229,7 @@ def plot_contour(coeffs, output_dir):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--csv", required=True, type=str)
-    ap.add_argument("--output-dir", default="Results_Sigmoidal_Fit_Joint", type=str)
+    ap.add_argument("--output-dir", default="Results_Sigmoidal_Fit", type=str)
     args = ap.parse_args()
 
     df = pd.read_csv(args.csv)
@@ -249,10 +249,10 @@ def main():
     print("\n  Per-porosity parameters (anchor points):")
     print(per_p.to_string(index=False, float_format=lambda x: f"{x:.4f}"))
 
-    per_p.to_csv(out / "fitted_parameters_joint.csv", index=False)
+    per_p.to_csv(out / "fitted_parameters.csv", index=False)
     pd.DataFrame([{
         "param": k, "slope": v[0], "intercept": v[1]
-    } for k, v in coeffs.items()]).to_csv(out / "linear_coeffs_joint.csv", index=False)
+    } for k, v in coeffs.items()]).to_csv(out / "linear_coeffs.csv", index=False)
 
     plot_fits(df, coeffs, out, lag_r=lag_r)
     plot_parameters(per_p, coeffs, out)

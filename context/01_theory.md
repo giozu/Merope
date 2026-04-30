@@ -146,17 +146,24 @@ $$ K_\delta(p, \delta^*) = K_{\min}(p) + \frac{K_{\max}(p) - K_{\min}(p)}{1 + \e
 
 Each parameter linear in $p$. Implemented in `experiments/fit_correction_factor.py` (`sigmoidal_correction`, `full_model`).
 
-### 6.3 ⚠ Three different parameter sets exist on disk
+### 6.3 Canonical parameter set (joint fit, 2026-04-30)
 
-This is a real reconciliation issue — see `03_paper_and_open_issues.md` for the action item.
+A joint linear-in-p fit on the full 47-point `keff_vs_delta.csv` was run on 2026-04-30 (`fit_correction_factor_joint.py`). It is **the canonical parameter set** and the figures behind it are the ones now in `paper/Images/Sigmoidal_Fit/`:
 
-| Source | $K_{\min}(p)$ | $K_{\max}(p)$ | $b(p)$ | $\delta_c(p)$ |
+| Parameter | Linear-in-p form | Anchor at p=0.1 | Anchor at p=0.2 | Anchor at p=0.3 |
 |---|---|---|---|---|
-| Mattiuz thesis p. 21 | $1.0049 - 0.157\,p$ | $1.098 - 4.116\,p$ | $10.86 + 89.98\,p$ | $-0.083 + 0.862\,p$ |
-| `WORKFLOW_COMPLETE.md` | $-4.74\,p + 1.26$ | $-0.15\,p + 1.00$ | $-1.98\,p - 5.58$ | $-1.08\,p + 0.64$ |
-| `Results_Sigmoidal_Fit/fitted_parameters.csv` (current, per-p rows) | 0.569 / ~0 / ~0 | 0.975 / 0.962 / 0.949 | −16.2 / −20 / −19.5 | ~0 / 0.082 / 0.151 |
+| $K_{\min}(p)$ | $0.850 - 2.500\,p$ | 0.600 (extrapolated) | 0.350 (anchored) | 0.100 (extrapolated) |
+| $K_{\max}(p)$ | $0.996 - 0.203\,p$ | 0.976 | 0.956 | 0.935 |
+| $b(p)$ | $-25.96 - 1.000\,p$ | -26.06 | -26.16 | -26.26 |
+| $\delta_c(p)$ | $0.008 + 0.530\,p$ | 0.061 | 0.114 | 0.167 |
 
-The current CSV has $K_{\min} \to 0$ for $p = 0.2, 0.3$ (the fit went degenerate there). The paper figures (`Sigmoidal_Fits.png`, `Parameters_vs_Porosity.png`, `K_eff_Contour.png` in `paper/Images/Sigmoidal_Fit/`) need to be re-generated from a clean fit, or the canonical parameter set has to be chosen and locked in.
+Persisted at `Results_Sigmoidal_Fit/linear_coeffs.csv` (top-level) and `paper/Images/Sigmoidal_Fit/linear_coeffs.csv`. The fit converged with cost 0.01014 (mean residual ~0.014 in $K_{\text{eff}}$ units).
+
+**Anchoring caveat to disclose in the discussion.** Of the three $K_{\min}$ anchor points, only $K_{\min}(p=0.2)=0.35$ is constrained by data: at p=0.2 the dataset includes $\delta=0.10$ where $K_\delta$ has dropped to 0.39, near the crack plateau. At p=0.1 the lowest sampled $\delta=0.10$ still sits near the upper plateau ($K_\delta \approx 0.91$); at p=0.3 there is no data below $\delta=0.15$ at all. So $K_{\min}(p=0.1)$ and $K_{\min}(p=0.3)$ are **structural extrapolations** through the linear-in-p regression, not observed values. This should be one explicit sentence in the paper.
+
+**Why the per-p script was abandoned.** `fit_correction_factor.py` fits independently at each p and then linearly regresses the four parameters against p. With sparse low-$\delta$ sampling, the per-p fit is under-determined: $K_{\min}$ hits its lower bound where the crack plateau is unsampled, and the downstream linear regression breaks. The script is kept as a deprecated benchmark only.
+
+**Why the δ-extension below 0.15 was dropped (2026-04-30).** A wrapper (`run_keff_vs_delta_p03_extension.py`) was written to add $\delta \in \{0.05, 0.07, 0.09, 0.11, 0.13\}$ at p=0.3 and anchor $K_{\min}(p=0.3)$ from data. At $n_\text{3D}=200$, $\Delta_\text{vox}=0.05$ — so the GB film at $\delta=0.05$ is exactly **one voxel thick**, the contrast jump is $10^3$, and AMITEX's iterative scheme stalled with residuals oscillating around $10^{26}$ before damping over thousands of iterations per case. It would have taken many hours per point. Abandoned. Future revisit needs $n_\text{3D} \geq 400$ (8× voxels, much higher cost) — not for this paper.
 
 ### 6.4 Key physical predictions
 

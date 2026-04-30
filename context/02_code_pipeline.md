@@ -2,7 +2,7 @@
 
 This file is a working manual: where the code lives, what each piece does, and the order in which it actually runs.
 
-## 1. Layout of `~/Merope/`
+## 1. Layout of `~/Merope/` (post-2026-04-30 cleanup)
 
 ```
 ~/Merope/
@@ -17,21 +17,29 @@ This file is a working manual: where the code lives, what each piece does, and t
 │   │   ├── statistics.py                                                # KS / χ² for slice-vs-image
 │   │   ├── pore_analysis.py                                             # Image segmentation + classification
 │   │   └── utils.py                                                     # ProjectManager (cd, log, send2trash)
-│   ├── experiments/                                                     # Research scripts (one per study)
-│   └── README.md                                                        # ⚠ Out of date — lists 3 core files / 3 experiments; reality is 8/12
+│   ├── experiments/                                                     # 12 research scripts (one per study)
+│   └── README.md                                                        # ⚠ Out of date — lists 3 core files / 3 experiments; reality is 5/12
 ├── *.sh                                                                 # Shell wrappers that call experiments/ scripts
-├── Results_Keff_vs_Delta/, Results_Keff_vs_Porosity/,                   # ★ REAL RESULTS — DO NOT DELETE ★
-│   Results_Optimization_*/, Results_Sigmoidal_Fit/                      #   (paper figures sourced from these)
+├── Results_Anisotropy/                                                  # ★ ALL CANONICAL RESULTS LIVE AT TOP-LEVEL ★
+│   Results_Distributed_Validation/                                      #   (post-2026-04-30 consolidation:
+│   Results_Keff_vs_Delta/                                               #    project_root/Results_*/ no longer exists)
+│   Results_Keff_vs_Porosity/
+│   Results_Optimization_Distributed/
+│   Results_Optimization_Interconnected/
+│   Results_Sigmoidal_Fit/                                               #   (renamed from Results_Sigmoidal_Fit_Joint)
+├── _to_delete/                                                          # 10 stale folders + 3 redundant scripts
+│   └── experiments/                                                     #   staged 2026-04-30; rm -rf when satisfied
 ├── *.png, *.csv (top-level)                                             # Mirrors of paper Images/ — also results
-├── Optimization_3D_structure/                                           # Pre-project_root prototype; superseded but kept
+├── Optimization_3D_structure/                                           # Pre-project_root prototype; SEM images live in exp_img/
 ├── PORE_ANALYSIS_QUICKSTART.md, README_PORE_ANALYSIS.md,                # Up-to-date how-tos for pore_analysis pipeline
 │   WORKFLOW_COMPLETE.md
-└── old_files/File originali/                                            # Mattiuz-era scripts + thesis. Mark for deletion AFTER mining.
+└── old_files/                                                           # Mattiuz-era scripts + thesis (recovered 2026-04-30
+                                                                         # WITHOUT the "File originali/" subdir on this machine)
 ```
 
-**Top-level rule**: `project_root/` is the source of truth. Anything outside it is either the upstream Mérope library, results, or legacy. Don't restructure without a reason.
+**Top-level rule**: `project_root/` is the source of truth for code; top-level `Results_*/` is the source of truth for outputs. Don't restructure without a reason.
 
-⚠ Two "Optimization_3D_structure" directories exist (`~/Merope/Optimization_3D_structure/` and `~/Merope/old_files/File originali/Optimization_3D_structure/`). Both contain the same 21 MB zip and old `main.py` / `MOX_structure_generator.py` / `statistical_test_func.py`. The first one's `exp_img/` folder is what `run_optimization.py` and the shell wrappers actually read; **don't delete it** until image paths in scripts are updated.
+⚠ `~/Merope/Optimization_3D_structure/exp_img/` (top-level, **NOT** in `old_files/`) holds the SEM images that `run_optimization.py` and the shell wrappers read. Don't delete unless image paths are updated.
 
 ## 2. `core/` — library
 
@@ -74,17 +82,19 @@ Three small helpers: `cleanup_folder` (uses `send2trash`, recoverable), `cd` con
 | Script | Study | Inputs | Outputs |
 |---|---|---|---|
 | `run_keff_vs_porosity.py` | Closed-porosity sweep, $p \in [0.01, 0.30]$. Calibrates Loeb α. | None (constants in file) | `Results_Keff_vs_Porosity/keff_vs_porosity.csv`, `Keff_Validation_Summary.png`, per-case `Phi_*_Nvox_*/` dirs |
-| `run_keff_vs_delta.py` | δ-sweep at $p = 0.1, 0.2, 0.3$ (interconnected). Generates the data behind the sigmoidal model. | `--recover` to skip already-computed cases | `Results_Keff_vs_Delta/keff_vs_delta.csv`, `Slide_Keff_vs_Delta.png`, per-case `P_*_Delta_*/` dirs |
-| `fit_correction_factor.py` | Sigmoidal fit on the δ-sweep CSV. Linear regressions of K_min, K_max, b, δ_c on p. | `--csv ... --output-dir ...` | `Results_Sigmoidal_Fit/fitted_parameters.csv`, `Sigmoidal_Fits.png`, `Parameters_vs_Porosity.png`, `K_eff_Contour.png` |
+| `run_keff_vs_delta.py` | δ-sweep at $p = 0.1, 0.2, 0.3$ (interconnected). Generates the data behind the sigmoidal model. Currently 47 points. | `--recover` to skip already-computed cases | `Results_Keff_vs_Delta/keff_vs_delta.csv`, `Slide_Keff_vs_Delta.png`, per-case `P_*_Delta_*/` dirs |
+| `run_anisotropy.py` (rewritten 2026-04-30) | Thesis Fig 16: directional K vs grain aspect ratio. 20 γ × 2 φ = 40 cases. Faithful to `old_files/Test porosità/aniso_delta_calc.py`. | `--recover` (filters K=0 rows), `--no-solver`, `--plot-only` | `Results_Anisotropy/anisotropy.csv`, `anisotropy.png`, per-case `AR_<γ>_Phi_<φ>/` dirs |
+| `run_grain_size_distribution.py` (new 2026-04-30) | Thesis Figs 17-18: K_eff vs σ of Gaussian-weighted grain volumes. σ ∈ {0.5, 3.0} at p≈0.20, δ=1.0, n3D=150. Faithful to `vol_distribution_IGB_calc.py`. | `--recover`, `--no-solver`, `--plot-only` | `Results_GrainSizeDistribution/summary.csv`, `volume_histograms.png`, `keff_comparison.png`, per-case `sigma_*/grain_volumes.csv + structure.vtk` |
+| `fit_correction_factor_joint.py` (canonical) | Joint linear-in-p sigmoidal fit on the full δ-sweep CSV. 8 free parameters across all p. | `--csv ... --output-dir ...` (default `Results_Sigmoidal_Fit`) | `Results_Sigmoidal_Fit/fitted_parameters.csv`, `linear_coeffs.csv`, `Sigmoidal_Fits.png`, `Parameters_vs_Porosity.png`, `K_eff_Contour.png` |
+| `fit_correction_factor.py` (deprecated 2026-04-30) | Per-p sigmoidal fit + linear regression of params on p. Goes degenerate when low-δ plateau is unsampled. K_min lower bound raised to 0.05 to prevent fully-zero fit. Kept for benchmarking against the joint fit only. | `--csv ... --output-dir ...` | Same filenames as joint script (in a different dir if `--output-dir` set) |
 | `run_optimization.py` | Bayesian opt to match SEM image. | `--mode {distributed,interconnected,test_*}`, `--exp-image PATH`, `--n-calls`, `--n3d`, `--run-amitex`, `--seed`, `--n-slices` | `Results_Optimization_<mode>/summary.txt`, `area_distribution.png`, `convergence.png`, `best_slice.png`, `best_geometry/structure.vtk`, `final_slices/` |
-| `predict_keff_from_optimization.py` | Apply sigmoidal correction to the optimized δ. | Path to `Results_Optimization_*` dir | `keff_prediction.txt` in same dir |
+| `predict_keff_from_optimization.py` (refactored 2026-04-30) | Apply sigmoidal correction to optimised δ. **Now loads coefficients from `Results_Sigmoidal_Fit/linear_coeffs.csv` instead of hardcoding** — old hardcoded WORKFLOW values were stale, predictions were inconsistent with the joint-fit figure. | Path to `Results_Optimization_*` dir; coeffs path overridable | `keff_prediction.txt` in same dir |
 | `compare_optimization_results.py` | Side-by-side bar chart distributed vs interconnected. | None | `comparison_distributed_vs_interconnected.png`, `keff_vs_porosity_comparison.png` (top-level) |
-| `run_anisotropy.py` | Directional K vs grain aspect ratio (Mattiuz §3.4.2). | Constants in file | Directional results — **figure not in paper** (commented out) |
-| `run_distributed_porosity.py` | Single-config closed-porosity run. | Constants in file | Per-case dirs |
-| `run_interconnected_porosity.py` | Single-config interconnected run. | Constants in file | Per-case dirs |
-| `run_mixed_porosity.py` | Single-config inter+intra. | Constants in file | Per-case dirs |
-| `run_delta_iteration.py` | Older variant of δ-sweep. | Constants in file | Per-case dirs |
-| `run_plots.py` | Plot helpers. | — | Plots only |
+| `run_distributed_porosity.py` | Single-config closed-porosity validation runs (R_pore × φ sweep behind the kept `Results_Distributed_Validation/`). | Constants in file | Per-case dirs |
+| `run_interconnected_porosity.py` | Single-config interconnected run. **Last archived run produced K=0 (now in `_to_delete/`); status uncertain.** | Constants in file | Per-case dirs |
+| `run_mixed_porosity.py` | Single-config inter+intra. **Same K=0 issue as `run_interconnected_porosity.py`; status uncertain.** | Constants in file | Per-case dirs |
+
+**Removed 2026-04-30** (moved to `_to_delete/experiments/`): `run_delta_iteration.py` (older δ-sweep variant, K_THERMAL bug), `run_keff_vs_delta_p03_extension.py` (one-shot helper for the abandoned low-δ extension), `run_plots.py` (older Mattiuz-era thesis-graph script with K_THERMAL bug, never referenced).
 
 ### 3.1 Phase IDs cheat sheet
 

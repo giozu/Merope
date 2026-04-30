@@ -28,8 +28,11 @@ Keff_vs_Porosity/  Keff_Validation_Summary.png, keff_vs_porosity.csv
 Optimization_Distributed/    area_distribution.png, best_slice.png, convergence.png, summary.txt, keff_prediction.txt
 Optimization_Interconnected/ area_distribution.png, best_slice.png, convergence.png, summary.txt, keff_prediction.txt
 Pore_Analysis/     distributed_77_original.png, distributed_77_analysis.png, connected_79_original.png, connected_79_analysis.png, pore_analysis_results.csv
-Sigmoidal_Fit/     Sigmoidal_Fits.png, Parameters_vs_Porosity.png, K_eff_Contour.png
+Sigmoidal_Fit/     Sigmoidal_Fits.png, Parameters_vs_Porosity.png, K_eff_Contour.png   ← refreshed 2026-04-30 from joint fit;
+                   fitted_parameters.csv, linear_coeffs.csv                              also dropped here for traceability.
 ```
+
+Anisotropy + GrainSizeDistribution figures are pending the runs initiated 2026-04-30 (see `04_next_session_plan.md`). When ready, they go under `Images/Anisotropy/` and `Images/GrainSizeDistribution/`.
 
 ## 2. Headline numbers in the paper
 
@@ -76,36 +79,24 @@ Each is a real study Mattiuz did. Figures in his thesis exist (PDF: `~/Merope/ol
 
 These are the issues most likely to bite during a co-author review or revision.
 
-### 5.1 Sigmoidal fit parameters — three versions on disk
+### 5.1 Sigmoidal fit parameters — RESOLVED (2026-04-30)
 
-See `01_theory.md` §6.3. In short:
-- **Mattiuz thesis (p. 21)** parameters look stable: $K_{\min}(p)$ stays near 1, $K_{\max}(p)$ trends down from 1.10.
-- **`WORKFLOW_COMPLETE.md`** has different coefficients (very steep $K_{\min}(p) = -4.74p + 1.26$).
-- **`Results_Sigmoidal_Fit/fitted_parameters.csv`** (most recent) is **degenerate**: $K_{\min} = 0$ for $p = 0.2$ and $p = 0.3$, $\delta_c \approx 0$ for $p = 0.1$.
+The joint fit (`experiments/fit_correction_factor_joint.py`) was run on the canonical 47-point `keff_vs_delta.csv` and produced clean coefficients:
 
-#### Root cause (data-level diagnosis of `keff_vs_delta.csv`)
+| Parameter | a (slope) | b (intercept) |
+|---|---|---|
+| $K_{\min}(p)$ | -2.500 | +0.850 |
+| $K_{\max}(p)$ | -0.203 | +0.996 |
+| $b(p)$ | -1.000 | -25.96 |
+| $\delta_c(p)$ | +0.530 | +0.008 |
 
-The independent per-p fit in `experiments/fit_correction_factor.py` is **under-determined**:
+Cost = 0.01014 over 47 points (mean residual ~0.014 in $K_{\text{eff}}$ units; `ftol`-converged in 13 iterations). Outputs are at `Results_Sigmoidal_Fit/` (top-level; renamed from `Results_Sigmoidal_Fit_Joint`) and the three PNGs + two CSVs were copied into `paper/Images/Sigmoidal_Fit/`.
 
-| p | min sampled δ | min sampled K_δ | Crack-plateau sampled? |
-|---|---|---|---|
-| 0.1 | 0.10 | 0.91 | **No** — already on the upper plateau |
-| 0.2 | 0.10 | 0.54 | One single point in the transition |
-| 0.3 | **0.15** | 0.44 | No δ=0.10 point at all; transition severely under-sampled |
+**Caveat to disclose in the paper.** Of the three $K_{\min}$ anchor points, only $K_{\min}(p=0.2) = 0.35$ is data-anchored (the dataset has a $\delta=0.10$ point where $K_\delta$ has dropped to 0.39, near the plateau). $K_{\min}(p=0.1)$ and $K_{\min}(p=0.3)$ are **structural extrapolations** through the linear-in-p regression. One sentence in `discussion.tex` is enough.
 
-With the crack-dominated plateau never sampled at p=0.1 and barely sampled at p=0.2, K_min has no data to constrain it; the optimizer hits its lower bound (0). Each independent fit pulls K_min wherever the bounds allow, breaking the linear-in-p regression downstream.
+**The data-level fix (extend δ < 0.15) was attempted and abandoned (2026-04-30).** A wrapper (`run_keff_vs_delta_p03_extension.py`, now in `_to_delete/`) ran for ~1 h at $n_\text{3D}=200$ without producing a single new row. AMITEX's iterative scheme stalls at $\delta=0.05$ because the GB film is exactly one voxel thick at that resolution and the 10³ contrast jump makes the linear system pathologically ill-conditioned. A genuine anchor would require $n_\text{3D} \geq 400$ — out of scope for this paper. See `01_theory.md` §6.3 for the longer write-up.
 
-#### Two complementary fixes
-
-1. **Methodological** — fit jointly with linear-in-p parameter dependence (8 params for 31 data points instead of 12 for 11/11/9). This is implemented in `experiments/fit_correction_factor_joint.py` (added 2026-04-29). It uses `scipy.optimize.least_squares` with `loss="soft_l1"` and a positive floor on K_min. Run:
-   ```bash
-   python project_root/experiments/fit_correction_factor_joint.py \
-     --csv Results_Keff_vs_Delta/keff_vs_delta.csv \
-     --output-dir Results_Sigmoidal_Fit_Joint
-   ```
-2. **Data-level** — extend `run_keff_vs_delta.py` to sample δ = 0.05, 0.07, 0.09, 0.11, 0.13 for all three porosity levels. That's 15 new simulations, ≈ 1–2 hours on 2 CPUs. With those points the independent fit will work too. Edit `DELTA_VALUES` in `experiments/run_keff_vs_delta.py` (currently starts at 0.15) and re-run with `--recover` to skip already-computed cases.
-
-The cleanest answer for the paper is: do (2), then either fit method works. (1) alone is enough for a defensible figure but does not change the fact that the data is sparse below δ=0.15.
+**Old per-p fit script kept as a deprecated benchmark.** `fit_correction_factor.py` is annotated at the top with the deprecation notice, and its $K_{\min}$ lower bound was raised from 0 to 0.05 so it can no longer produce the fully-degenerate fit.
 
 ### 5.2 Pore analysis values — three versions
 
@@ -130,20 +121,25 @@ The paper's table values do not appear in any `summary.txt` on disk. They may co
 
 **Action:** trace which run produced 0.901 / 0.676. Either (a) re-run optimization to current scoring and update Table 1, or (b) update the summary files with the run that matches the paper text.
 
-### 5.4 Grant agreement number
+### 5.4 Grant agreement number — RESOLVED (verified 2026-04-30)
 
-- Paper Acknowledgements: **n°101166386** ❌ (incorrect — typo)
-- Mattiuz thesis Italian abstract: **No.101059543** ✓ (correct, confirmed via CORDIS)
-
-The official ESFR-SIMPLE grant is **101059543** (EURATOM, 2021–2025; <https://cordis.europa.eu/project/id/101059543> and <https://esfr-simple.eu/>). The number in the paper Acknowledgements does not exist on CORDIS. **Action**: edit `main.tex` line ~80 to replace `101166386` with `101059543`. Also consider rewording the official project title to *"European Sodium Fast Reactor — Safety by Innovative Monitoring, Power Level flexibility and Experimental research"* (the official long form).
+`main.tex` line 75 already contains `n°101059543` (CORDIS-verified correct). The earlier note about a `101166386` typo refers to a draft state that has since been fixed. Nothing to do.
 
 ### 5.5 Target porosity for distributed optimization
 
 `run_optimization.py --mode distributed` summary on disk says **target = 24.6 %**, paper text says target = 23 %. Probably a stale run; re-runnable in 2–3 hours.
 
-## 6. Mining `old_files/File originali/`
+### 5.6 Stale sigmoidal coefficients in `predict_keff_from_optimization.py` — RESOLVED (2026-04-30)
+
+The script previously hardcoded the OLD WORKFLOW coefficients (`k_min = -4.74p + 1.26`, etc.) — meaning any `keff_prediction.txt` it produced was internally inconsistent with the joint-fit figure in `paper/Images/Sigmoidal_Fit/`. Refactor: it now loads `{slope, intercept}` from `Results_Sigmoidal_Fit/linear_coeffs.csv` at runtime via `load_sigmoid_coeffs()`. Verified that the loader returns the joint-fit values exactly.
+
+**Side-effect to revisit before submission.** The new prediction at the connected_79 morphology (p_b=0.138, p_intra=0.085, δ*=0.5) gives K_eff = 0.694 — substantially higher than the old WORKFLOW prediction (~0.446) because at δ*=0.5 the joint fit puts $K_\delta$ near its upper plateau (~0.97). Whether the headline "40% reduction" claim still holds depends on the actual optimised δ in `Results_Optimization_Interconnected/summary.txt`. Re-run the prediction on both `Results_Optimization_*/` directories to refresh `keff_prediction.txt` files and check.
+
+## 6. Mining `old_files/`
 
 This is the Mattiuz codebase prior to the project_root refactor. Italian filenames; `phase 1 = porous` convention; many scripts hard-coded to `/home/alessio/Thesis_Merope/...`.
+
+⚠ **Layout on this machine (recovered 2026-04-30)**: `~/Merope/old_files/Test porosità/...` (no `File originali/` subdir as on the previous machine). Adjust paths in this section accordingly when looking for the referenced scripts.
 
 | Folder / File | Content | Useful for paper? |
 |---|---|---|
@@ -186,16 +182,17 @@ Sweep done 2026-04-29 across `main.tex`, `introduction.tex`, `methods.tex`, `res
 
 ## 8. Decisions for Giovanni
 
-In rough order of impact on time-to-submission. Items marked ✅ done in the 2026-04-29 audit pass.
+In rough order of impact on time-to-submission. Items marked ✅ done.
 
-1. **Sigmoidal fit reconciliation** (§5.1) — joint fit script written (`experiments/fit_correction_factor_joint.py`); needs to be run + plot regenerated. Optionally extend δ-sweep to δ < 0.15 to constrain K_min from data.
-2. **Pore-analysis number reconciliation** (§5.2) — paper text contradicts paper figures. Pick one, regenerate the other.
-3. **Optimization scores in Table 1** (§5.3) — paper Table 1 says distributed avg=0.901, interconnected avg=0.676; the archived `summary.txt` files show 0.4895/0.3338. The paper's claimed numbers are not reproducible from any artifact on disk.
-4. **Commented-out subsections** (§3) — Giovanni confirmed (2026-04-29) that some thesis figures are "too basic" and the commented text can be deleted. Suggested deletions: RVE representativity, voxel resolution, composite voxel rules (3 sections — methodology details that the paper's Methods covers in prose). Keep candidate: closed-porosity Loeb α=1.37 calibration (this is part of the headline result), and possibly anisotropy (narrative weight) and grain-size-distribution (clean negative result).
-5. **Bibliography case bugs** (§4) — ✅ `Torquato2002` fixed in bib; check that `loeb1934` is intentionally uncited (not a missing cite).
-6. **Grant agreement number** (§5.4) — ✅ confirmed correct value is 101059543 (EURATOM, CORDIS-verified). `main.tex` Acknowledgements still has wrong 101166386 — needs editing.
-7. **`project_root/README.md`** — out of date; lists 3 core files + 3 experiments, reality is 8 + 12. Update as part of polish.
-8. **Decide on `old_files/` cleanup plan** (§6).
+1. **Sigmoidal fit reconciliation** (§5.1) — ✅ joint fit run, paper figures refreshed, deprecation note on the per-p script.
+2. **Stale coefficients in `predict_keff_from_optimization.py`** (§5.6) — ✅ refactored to load from `linear_coeffs.csv`. Need to re-run on both optim directories before submission to refresh `keff_prediction.txt` and verify the "40 % reduction" claim still holds.
+3. **Pore-analysis number reconciliation** (§5.2) — paper text contradicts paper figures. Still open. Likely root cause: the third positional CLI arg of `pore_analysis.py` changed meaning at some point (paper-text numbers were produced with `... 0.195 80`, current CLI treats third arg as circularity_threshold ∈ [0,1]). Investigate via git history.
+4. **Optimization scores in Table 1** (§5.3) — paper Table 1 says distributed avg=0.901, interconnected avg=0.676; archived `summary.txt` files show 0.4895/0.3338. Still open; trace which run produced 0.901/0.676.
+5. **Commented-out subsections** (§3) — Giovanni confirmed (2026-04-29) some thesis figures are "too basic" and can be deleted. Suggested deletions: RVE representativity, voxel resolution, composite voxel rules. Keep: anisotropy (run launched 2026-04-30 — `run_anisotropy.py`) and grain-size-distribution (script written 2026-04-30 — `run_grain_size_distribution.py`, awaits run).
+6. **Bibliography case bugs** (§4) — ✅ `Torquato2002` fixed; check that `loeb1934` is intentionally uncited (not a missing cite).
+7. **Grant agreement number** (§5.4) — ✅ verified correct in `main.tex` line 75.
+8. **`project_root/README.md`** — out of date; lists 3 core files + 3 experiments, reality is 5 + 12. Update as part of polish.
+9. **Final cleanup**: review `_to_delete/` and `rm -rf` once satisfied. Decide whether to keep the three `run_*_porosity.py` validation scripts (interconnected and mixed last produced K=0; status uncertain).
 
 ## 8. Things that may still need new simulation
 

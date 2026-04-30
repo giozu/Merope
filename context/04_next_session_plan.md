@@ -1,8 +1,8 @@
 # 04 — Plan for next session
 
-Ordered to start the long-running compute first (so it runs while you write/read), then writing tasks that don't need compute, then assembly once results are in.
+Updated 2026-04-30 after a long working session. Previous "kick off compute first" plan has been worked through; this file now reflects the new state and the remaining punch list.
 
-## Phase 1 — kick off compute (do first, then leave running)
+## Snapshot of today (2026-04-30)
 
 ### 1.1 Rewrite `run_anisotropy.py` to match thesis Fig 16
 **File:** `~/Merope/project_root/experiments/run_anisotropy.py`
@@ -34,134 +34,121 @@ Ordered to start the long-running compute first (so it runs while you write/read
 Edit `experiments/run_keff_vs_delta.py`: prepend `0.05, 0.07, 0.09, 0.11, 0.13` to `DELTA_VALUES`. Run `bash run_keff_vs_delta.sh` (uses `--recover`, skips already-done cases).
 **Run time on 32 cores:** ~5-10 min (15 new cases). Makes the per-p sigmoidal fit non-degenerate and removes the K_min lower-bound clamp now disclosed in §3.4.
 
-⚠ **Resolution caveat** (per `01_theory.md` §4.1a, §02 §6a). With current `L = 10`, `n3D = 200` → $\Delta_\text{vox} = 0.05$, the GB layer at $\delta = 0.05$ is sampled by only **one voxel** (against the rule $\delta/\Delta_\text{vox} > 5$). At $\delta = 0.07$ it is 1.4 voxels. Below δ ≈ 0.25 the simulation relies entirely on the composite-voxel Voigt rule to capture the percolating crack — which is what `run_keff_vs_delta.py` already assumes for the lowest current point, $\delta = 0.15$ (3 voxels). So extending downward is consistent with the existing setup, but the fit-quality floor is the composite-voxel approximation, not the voxel grid. **Recommendation**: run the δ ∈ {0.05, 0.07, 0.09, 0.11, 0.13} extension at `n3D = 200` for consistency with the existing CSV; spot-check one point at `n3D = 400` to confirm the trend isn't a Voigt-rule artefact. If the spot check matches, proceed; if it diverges, the sigmoidal fit's low-δ asymptote $K_\text{min}(p)$ is upper-bounded by Voigt and shouldn't be reported as a converged number.
+## Phase 1 — finish the compute initiated today
 
-**At this point, ~4 hr of compute is queued. Walk away or move to Phase 2 in parallel.**
+### 1.1 Wait for the anisotropy sweep to finish
 
-## Phase 2 — writing-only tasks (run while compute is going)
+Inside `tmux` ideally — terminal close kills the run. Status checks:
+```bash
+wc -l ~/Merope/Results_Anisotropy/anisotropy.csv
+tail -3 ~/Merope/Results_Anisotropy/anisotropy.csv
+```
+Expected: 41 lines (header + 40 cases) when complete. The script writes the CSV after each case, so partial progress is preserved.
 
-### 2.1 Run the joint sigmoidal fit on existing data
+### 1.2 Run the grain-size-distribution sweep
+
+Only after anisotropy completes (otherwise both compete for cores). Two cases at $n_\text{3D}=150$, ~5–10 min each:
 ```bash
 cd ~/Merope
-python project_root/experiments/fit_correction_factor_joint.py \
-  --csv Results_Keff_vs_Delta/keff_vs_delta.csv \
-  --output-dir Results_Sigmoidal_Fit_Joint
+source Env_Merope.sh
+export PYTHONPATH=$PYTHONPATH:./project_root
+python project_root/experiments/run_grain_size_distribution.py
 ```
-Inspect `Sigmoidal_Fits_Joint.png`, `Parameters_vs_Porosity_Joint.png`, `K_eff_Contour_Joint.png`. If the fit looks clean, copy these into `paper/Images/Sigmoidal_Fit/` (replacing the degenerate ones). Update results.tex captions to match the new fit if numerical values changed.
-**Time:** 10-15 min.
+Outputs land in `Results_GrainSizeDistribution/`. `--recover` works the same as the anisotropy script.
 
-### 2.2 Reconcile pore-analysis numbers
-Decide which set is canonical:
-- **Paper text** (recommended): connected_79 = 21.8 % total / 13.8 % boundary / 8.0 % intra; distributed_77 = 23.0 % total / ~0 % boundary / 23.0 % intra
-- **Current CSV**: connected_79 = 25.9 % total / 23.2 % inter / 2.8 % intra (inverted!); distributed_77 = 23.2 % / 5.4 % inter / 17.8 % intra
+### 1.3 Refresh the optimisation predictions
 
-Inspect `core/pore_analysis.py` parameters (`circularity_thr`, `area_inter_thr_um2`, `min_area_inter_um2`) used in the live `run_pore_analysis.sh`. Find the threshold combination that reproduces the paper-text numbers (the sensitivity sweep `python project_root/core/pore_analysis.py <img> 0.195 --sensitivity` is the right tool). Then re-run `bash run_pore_analysis.sh`, copy the new `pore_analysis_results.csv` and the `*_analysis.png` files into `paper/Images/Pore_Analysis/`.
-**Time:** 30-60 min including sensitivity sweep.
+```bash
+python project_root/experiments/predict_keff_from_optimization.py Results_Optimization_Interconnected
+python project_root/experiments/predict_keff_from_optimization.py Results_Optimization_Distributed
+```
+This regenerates `keff_prediction.txt` in each directory using the joint-fit coefficients. **Verify the headline "40 % reduction" claim still holds** at the optimised δ — the new joint fit puts $K_\delta$ near its upper plateau already at δ*=0.5, so the magnitude of the reduction may have shifted. See `03 §5.6`.
 
-### 2.3 Recover or update Table 1 optimisation scores
-The paper claims distributed avg = 0.901, interconnected avg = 0.676. The archived `summary.txt` files show 0.4895 / 0.3338. Two paths:
-- **(a) Find the run that produced 0.901/0.676.** Search git history (`git log` in `~/Merope/`); look for older `Results_Optimization_*` snapshots. If the archived run is in a different branch or stash, recover it.
-- **(b) Re-run optimisation** with current scoring; update Table 1 + the captioned best-slice numbers to match. ~4 hr per mode at `--n-calls 50 --n3d 120`. Can run during Phase 1 if there's CPU headroom.
+## Phase 2 — writing & paper assembly
 
 If neither approach works in reasonable time, **drop the avg-score numbers** from Table 1 and report only the per-slice (KS, χ²) p-values — those at least match `summary.txt`.
 **Time:** 30 min investigation + decision; **~1-1.5 hr** if re-running both modes on 32 cores (each Bayesian iteration drops from ~4 min to ~1 min when AMITEX uses 8-16 cores).
 
-### 2.4 Port thesis prose for §3.4.2 (Anisotropy) and §3.4.3 (Grain size)
-Source: `2025_07_Mattiuz_Thesis_01.pdf` pages 22-24. Translate to paper-quality English (the thesis prose is OK but bears editing). Apply UK English + plain hyphens per `~/research-manuscripts/writing_guidelines.md`.
+Source: `~/Merope/old_files/2025_07_Mattiuz_Thesis_01.pdf` pages 22–24. Translate to UK English + plain hyphens (`writing_guidelines.md`). Drop into `results.tex` at the existing commented `\subsubsection{...}` placeholders. Add the new figure includes:
+- `Images/Anisotropy/anisotropy.png`
+- `Images/GrainSizeDistribution/volume_histograms.png`
+- `Images/GrainSizeDistribution/keff_comparison.png`
 
-Drop into `results.tex` at the commented `\subsubsection{Anisotropy and directional effects in interconnected porous microstructures}` and `\subsubsection{Effect of grain size distribution on thermal conductivity}` placeholders. Uncomment those blocks and add proper `\includegraphics` paths to the figures generated in Phase 1. Cross-reference the §6 design-guidelines bullets that mention "anisotropic IGB networks" and "grain size heterogeneity" so the new figures back them up.
-**Time:** 1-1.5 hr.
+Also add **one sentence in `discussion.tex`** on the K_min(p) extrapolation — at p=0.1 and p=0.3 the lower asymptote of the sigmoid is set by the linear-in-p regression, not by direct measurement, because no data was sampled below the plateau at those porosities.
 
-## Phase 3 — assembly (after Phase 1 compute finishes)
+### 2.2 Pore-analysis number reconciliation (`03 §5.2`)
 
-### 3.1 Generate paper-quality figures from anisotropy + grain-size CSVs
-Add a `make_anisotropy_plot.py` and `make_grain_size_plot.py` either in `experiments/` or as helpers in the existing scripts. Output:
-- `paper/Images/Anisotropy/relative_diff_vs_aspect_ratio.png` (thesis Fig 16 analogue)
-- `paper/Images/GrainSizeDistribution/volume_histograms.png` (Fig 17)
-- `paper/Images/GrainSizeDistribution/keff_vs_porosity_grain_dist.png` (Fig 18)
-**Time:** 30-45 min.
+Still open. Likely root cause is a CLI signature change in `core/pore_analysis.py`: paper-text numbers were produced with `... 0.195 80` (third arg seemingly an area filter), current CLI treats the third positional arg as a circularity threshold in [0, 1]. Diff against git history to find when the meaning changed; either restore old behaviour or sweep `circularity_thr × min_area_um2` until the analysis reproduces the paper text (connected_79: 21.8 % / 13.8 % / 8.0 %; distributed_77: 23.0 % / ~0 % / 23.0 %).
 
-### 3.2 Verify figures match prose; commit
-Read the uncommented results.tex sections side-by-side with the new figures. Audit symbol consistency (γ for aspect ratio, σ for the grain-volume weighting spread — make sure the legend/axis label/prose all use the same symbol). Apply UK English check on the new prose.
-**Time:** 30 min.
+### 2.3 Recover or update Table 1 optimisation scores (`03 §5.3`)
 
-### 3.3 Compile and inspect
+Paper Table 1 says distributed avg = 0.901, interconnected avg = 0.676. Archived `summary.txt` files show 0.4895 / 0.3338. The paper's claimed numbers do not appear in any artefact on disk. Either find the run that produced them (search git history, look for older snapshots) or re-run optimisation with current scoring and update Table 1.
+
+### 2.4 Compile and inspect the paper
+
 ```bash
 cd ~/research-manuscripts/Luzzi_et_al___MEROPE__2026/
 pdflatex main.tex && bibtex main && pdflatex main.tex && pdflatex main.tex
 ```
-Grep `main.log` for `Citation` / `Reference` / `LaTeX Warning` lines. Fix any undefined refs. Skim the rendered PDF for layout issues (figure placement, table overflows).
-**Time:** 30 min unless something serious breaks.
+Grep `main.log` for `Citation` / `Reference` / `LaTeX Warning`. Skim the rendered PDF.
 
-## Phase 4 — polish (do last)
+## Phase 3 — polish and tidy
 
-### 4.1 Update `project_root/README.md`
-Out of date: lists 3 core files + 3 experiment scripts; reality is 8 + 13 (after the joint-fit script). Take 15 min to refresh the file tree and add a "How to reproduce paper figures" mini-guide.
+### 3.1 `core/geometry.py` API gap
 
-### 4.2 Decide on `old_files/` cleanup
-Per `context/03_paper_and_open_issues.md` §6:
-- Move thesis PDF + presentation slides into `~/research-manuscripts/Luzzi_et_al___MEROPE__2026/_supporting/` (or a new `references/` dir).
-- Tar `Test porosità/` + `Test statistici/` into `mattiuz_legacy.tar.gz` next to the thesis.
-- Delete the rest.
-- **Keep** `~/Merope/Optimization_3D_structure/exp_img/` (top-level, not `old_files/`) — `run_optimization.py` reads its SEM images.
+`generate_polycrystal()` accepts `aspect_ratio`, but `generate_mixed_structure()` does not. That's why `run_anisotropy.py` had to inline-build today. Add an `aspect_ratio=(1,1,1)` kwarg to `generate_mixed_structure` for symmetry. Also consider deduplicating `generate_delta_structure` and the inline build in `run_keff_vs_delta.py:worker()` (same recipe).
 
-### 4.3 Decide what to track from `Results_*/` in git
+### 3.2 Refresh `project_root/README.md`
 
-Current state (audited 2026-04-30): six `Results_*` folders exist at top-level, totalling ~355 MB. None are git-tracked, and only `DeltaScan_Results` (a legacy unrelated name) appears in `.gitignore`. So these folders are in limbo: not staged, not ignored.
+Lists 3 core files + 3 experiment scripts; reality is 5 + 12. Add a "How to reproduce paper figures" mini-guide with the canonical command sequence.
 
-| Folder | Size | What it contains | Recommendation |
-|---|---|---|---|
-| `Results_Keff_vs_Delta/` | 232 KB | `keff_vs_delta.csv` + per-case `P_*_Delta_*/thermalCoeff_amitex.txt` | Track everything (small) |
-| `Results_Keff_vs_Porosity/` | 336 MB | `keff_vs_porosity.csv` + per-case `Phi_*_Nvox_*/{structure.vtk,Coeffs.txt,...}` | Track CSV + `Keff_Validation_Summary.png` only; gitignore per-case dirs (the `.vtk` files are the bulk) |
-| `Results_Optimization_Distributed/` | 8.8 MB | `summary.txt`, `convergence.png`, `area_distribution.png`, `best_slice.png`, `best_geometry/structure.vtk`, `final_slices/`, `work/` | Track top-level files; gitignore `work/` and `final_slices/`; possibly track `best_geometry/structure.vtk` if reasonable size, otherwise skip |
-| `Results_Optimization_Interconnected/` | 8.7 MB | Same structure | Same recommendation |
-| `Results_Sigmoidal_Fit/` | 604 KB | `fitted_parameters.csv`, 3 PNGs | Track everything |
-| `Results_Sigmoidal_Fit_Joint/` | 588 KB | New joint-fit outputs | Track everything |
+### 3.3 Decide on the three `run_*_porosity.py` validation scripts
 
-**Action items:**
-1. Decide the policy: track summaries/CSVs/headline figures, gitignore per-case `.vtk` and intermediate `work/` directories.
-2. Add appropriate `.gitignore` patterns. Suggested:
-   ```
-   Results_Keff_vs_Porosity/Phi_*_Nvox_*/
-   Results_Keff_vs_Delta/P_*_Delta_*/
-   Results_Optimization_*/work/
-   Results_Optimization_*/final_slices/
-   Results_Optimization_*/best_geometry/structure.vtk
-   ```
-3. `git add` the surviving CSVs, summaries, and PNGs.
-4. Consider archiving the bulky `.vtk` files separately (e.g., a Zenodo data deposit linked from the paper) if reproducibility requires them.
+`run_distributed_porosity.py` produced the data behind the kept `Results_Distributed_Validation/`. `run_interconnected_porosity.py` and `run_mixed_porosity.py` last produced K=0 (those folders are now in `_to_delete/`). Either debug them (~30 min each) or move both to `_to_delete/`.
 
-**Why this matters for the paper:** the per-case `.vtk` files are the AMITEX inputs/outputs — 95 % of the mass in the Results dirs is them. They're regenerable from the scripts in `project_root/experiments/`, so tracking them in git is wasteful. Tracking the CSVs + summary PNGs gives a co-author or reviewer enough to inspect numbers without bloating the repo.
+### 3.4 Clear `_to_delete/`
 
-## Phase 5 — submission (separate session)
+```bash
+rm -rf ~/Merope/_to_delete
+```
+Once you're satisfied nothing in there is needed. ~49 MB total.
 
-Once Phases 1-4 are done, start fresh: a co-author review pass, journal-specific formatting (Elsevier `cas-sc.cls` if J. Nucl. Mat. has changed templates since the elsarticle preprint we're using), and the cover letter.
+### 3.5 Decide what to track from `Results_*/` in git
+
+Per the policy in the previous version of this file (now relevant since all `Results_*/` are at top-level): track summaries / CSVs / headline figures, gitignore per-case `.vtk` and intermediate `work/` directories. Suggested `.gitignore` patterns:
+```
+Results_Keff_vs_Porosity/Phi_*_Nvox_*/
+Results_Keff_vs_Delta/P_*_Delta_*/
+Results_Anisotropy/AR_*_Phi_*/
+Results_GrainSizeDistribution/sigma_*/structure.vtk
+Results_GrainSizeDistribution/sigma_*/Coeffs.txt
+Results_Optimization_*/work/
+Results_Optimization_*/final_slices/
+Results_Optimization_*/best_geometry/structure.vtk
+```
+
+## Phase 4 — submission (separate session)
+
+Co-author review pass, journal-specific formatting check (Elsevier `cas-sc.cls` if NED template requires), cover letter.
 
 ---
-
-## What I will NOT touch in the next session unless explicitly asked
-
-- The Mérope library itself (third-party).
-- The optimisation scoring formula (any change invalidates Table 1).
-- Bibliography entries beyond the one fix already applied (`Torquato2002`).
-- The δ\* descriptor or sigmoidal model functional form.
 
 ## Quick references
 
 - Open issues catalogue: `~/Merope/context/03_paper_and_open_issues.md`
 - Theory: `~/Merope/context/01_theory.md` §6 (sigmoidal correction)
-- Code idioms: `~/Merope/context/02_code_pipeline.md` §8 (Mérope test recipes)
+- Code idioms: `~/Merope/context/02_code_pipeline.md`
 - Writing rules: `~/research-manuscripts/writing_guidelines.md`
 - Joint fit script: `~/Merope/project_root/experiments/fit_correction_factor_joint.py`
+- Anisotropy script: `~/Merope/project_root/experiments/run_anisotropy.py`
+- Grain-size script: `~/Merope/project_root/experiments/run_grain_size_distribution.py`
 
-## Estimated timeline on the 32-core machine (revised 2026-04-30)
+## What I will NOT touch in the next session unless explicitly asked
 
-| Phase | Compute | Writing | Wallclock |
-|---|---|---|---|
-| 1 (kick off) | ~30-45 min | 1-1.5 hr | 2 hr |
-| 2 (parallel) | 0-1.5 hr | 2-3 hr | 3 hr |
-| 3 (assembly) | 0 | 1-1.5 hr | 1.5 hr |
-| 4 (polish) | 0 | 30-45 min | 45 min |
-| **Total** | **~30 min - 2 hr** | **5-7 hr** | **~7 hr active wallclock** |
+- The Mérope library itself (third-party).
+- The optimisation scoring formula (any change invalidates Table 1).
+- The δ\* descriptor or sigmoidal model functional form.
+- The joint-fit coefficients in `linear_coeffs.csv` (they are the paper-canonical values).
+
 
 The compute axis collapses on 32 cores: per-case AMITEX runs are dominated by FFT (near-linear scaling), and a typical voxel grid (n3D = 150-200) finishes in well under a minute when AMITEX gets 8-16 ranks. So Phase 1 is "kick off and wait briefly" rather than "kick off and walk away".

@@ -2,7 +2,7 @@
 
 ## What this project is
 
-A study of **how pore morphology controls effective thermal conductivity** $K_{\text{eff}}$ of ceramic nuclear fuels (UO$_2$, MOX). The deliverable is a journal paper for the *Journal of Nuclear Materials*:
+A study of **how pore morphology controls effective thermal conductivity** $K_{\text{eff}}$ of ceramic nuclear fuels (UO$_2$, MOX). The deliverable is a journal paper for *Nuclear Engineering and Design* (target confirmed in `main.tex` line 15: `\journal{Nuclear Engineering and Design}`):
 
 > **Luzzi, Zullo, Mattiuz, Pizzocri** — *Morphological analysis of the thermal conductivity in highly porous ceramic materials* (2026).
 
@@ -36,7 +36,7 @@ Material constants used throughout: $\kappa_m = 1.0$ (normalized matrix), $\kapp
 ## The headline results
 
 1. **Loeb recalibrated**: $\alpha = 1.37$ (vs IAEA 2.5) gives < 2 % error over $p \in [0, 0.30]$ for distributed porosity. Matches Morimoto et al. (2008) for $(U,Pu,Am)O_2$.
-2. **Sigmoidal correction factor** $K_\delta(p, \delta^*)$ applied as $K_{\text{eff}} = K_{\text{Loeb}}(p) \cdot K_\delta(p,\delta^*)$, where $\delta^* = \delta / L_{\text{grain}}$ is the normalized grain‑boundary thickness. Captures the smooth transition from crack‑dominated ($\delta^* < 0.2$) to distributed‑like ($\delta^* > 0.5$) regimes.
+2. **Sigmoidal correction factor** $K_\delta(p, \delta^*)$ applied as $K_{\text{eff}} = K_{\text{Loeb}}(p) \cdot K_\delta(p,\delta^*)$, where $\delta^* = \delta / L_{\text{grain}}$ is the normalized grain‑boundary thickness. Captures the smooth transition from crack‑dominated ($\delta^* < 0.2$) to distributed‑like ($\delta^* > 0.5$) regimes. **Canonical joint-fit parameters (2026-04-30, 47-point CSV)**: $K_{\min}(p) = 0.85 - 2.50p$, $K_{\max}(p) = 0.996 - 0.203p$, $b(p) = -25.96 - 1.00p$, $\delta_c(p) = 0.008 + 0.530p$. See `Results_Sigmoidal_Fit/linear_coeffs.csv` (top-level).
 3. **40 % drop in $K_{\text{eff}}$** for interconnected vs distributed morphology at the same total porosity ($p \approx 22\%$): $0.606$ vs $1.00$ (normalized). Loeb alone cannot predict this; the sigmoidal correction can.
 4. **Bayesian optimization works**: synthetic 3D RVEs whose 2D slices statistically match SEM images (KS + $\chi^2$ p‑values > 0.7).
 
@@ -48,9 +48,10 @@ But **`results.tex` has 5 subsections commented out** ("missing figures"): RVE c
 
 ## Where the code lives
 
-- **Canonical**: `~/Merope/project_root/` (`core/` library + `experiments/` scripts)
-- **Top‑level `~/Merope/`**: holds the Mérope C++/Python library (third‑party, do not edit), shell wrappers that call into `project_root/experiments/`, and `Results_*` directories that **are real numerical results — keep, don't delete**.
-- **Legacy**: `~/Merope/old_files/File originali/` — Mattiuz‑era scripts and the thesis PDF. Mark for eventual deletion **after** mining anything still useful (some scripts produced the missing‑figure thesis results).
+- **Canonical**: `~/Merope/project_root/` (`core/` library + `experiments/` scripts).
+- **Top‑level `~/Merope/`**: holds the Mérope C++/Python library (third‑party, do not edit), shell wrappers that call into `project_root/experiments/`, and **all canonical `Results_*` directories** (after the 2026-04-30 cleanup; see `02_code_pipeline.md`).
+- **`~/Merope/_to_delete/`** (created 2026-04-30): 10 stale folders + 3 redundant scripts staged for deletion. `rm -rf` when satisfied.
+- **Legacy**: `~/Merope/old_files/` — Mattiuz‑era scripts and the thesis PDF. **Note (2026-04-30)**: this machine's recovered copy has the layout `old_files/Test porosità/...` (no `File originali/` subdir as on the previous machine).
 
 ## Reading order for new context
 
