@@ -93,25 +93,29 @@ def fit_joint(df, p_anchor=(0.1, 0.2, 0.3)):
     k_eff = df["K_eff"].values
     y_corr = k_eff / loeb(p)
 
-    # Initial guess: read off thesis values
-    # K_min(p) ~= 1.005 - 0.157 p  -> a_kmin = -0.157, b_kmin = 1.005  (looks too high; start lower)
-    # we use a softer prior consistent with the *data*: at p=0.2, K_delta(min) ~ 0.54
+    # Initial guess: physically-motivated priors.
+    #   K_min(p) is the crack-dominated plateau. At p=0.1 the data only spans
+    #   0.91-0.99, so K_min(0.1) is unidentified from data alone -- it must
+    #   be constrained by a physical prior (it cannot drop to zero at low p).
     theta0 = np.array([
-        -1.5, 0.7,    # K_min:  starts ~0.55 at p=0.1, drops to ~0.25 at p=0.3
-         0.05, 0.95,  # K_max:  near 1, gentle p-dependence
-        -50.0, -5.0,  # b:      negative, steeper at high p
-         0.5, 0.05,   # delta_c: rises with p, ~ 0.10 at p=0.1, ~ 0.20 at p=0.3
+        -2.0, 0.95,   # K_min:  ~0.75 at p=0.1, ~0.35 at p=0.3
+         0.0, 0.97,   # K_max:  near 1
+        -30.0, -5.0,  # b:      negative, steeper at high p
+         0.5, 0.05,   # delta_c: rises with p
     ])
 
-    # Bounds on each linear coefficient. We constrain endpoints implicitly:
-    #   K_min(0.1) >= 0.05, K_min(0.3) <= 0.95  -> derived constraints below
-    # least_squares supports per-parameter bounds; tight bounds prevent collapse.
-    lb = np.array([-5.0, 0.0,    # K_min linear coeffs
-                   -1.0, 0.7,    # K_max
-                   -200.0, -50.0,  # b (must be negative, very steep allowed)
+    # Tight bounds keep the linear-in-p parametrisation in a physically
+    # sensible regime over p in [0.05, 0.35]:
+    #   K_min(p) in [0.10, 1.05]   (crack-dominated plateau, never < 0.10)
+    #   K_max(p) in [0.85, 1.05]   (recovery toward Loeb)
+    #   b(p)     < 0                (sigmoid with crack-dominated regime at low delta)
+    #   delta_c(p) in [0, 1.0]
+    lb = np.array([-2.5, 0.85,    # K_min:  K_min(0.3) >= 0.85 - 0.75 = 0.10
+                   -0.5, 0.85,    # K_max
+                   -200.0, -50.0,  # b
                    -1.0, -0.2])    # delta_c
-    ub = np.array([ 0.0, 1.5,
-                    1.0, 1.1,
+    ub = np.array([ 0.0, 1.05,
+                    0.2, 1.05,
                    -1.0,  0.0,
                     3.0,  0.5])
 
