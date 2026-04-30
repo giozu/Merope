@@ -16,7 +16,7 @@ Ordered to start the long-running compute first (so it runs while you write/read
 - Compute `(K_mean - K_yy)/K_yy` post-hoc for the plot
 - n3D = 100 (matches thesis), grain_radius = 3.0, delta = 1.0
 - `K_THERMAL = [1.0, 1.0, 1e-3]` consistent with `run_keff_vs_delta.py`
-**Expected time to write:** 30-45 min. **Run time:** ~2 hr (~ 36 cases × 3 min).
+**Expected time to write:** 30-45 min. **Run time on 32 cores:** ~15-20 min (AMITEX with `n_cpus=8` per case, run cases sequentially or 2-4 in parallel via `multiprocessing`).
 
 ### 1.2 Write `run_grain_size_distribution.py`
 **Reference:** `~/Merope/old_files/File originali/Test porosità/vol_distribution_IGB_calc.py`
@@ -28,11 +28,11 @@ Ordered to start the long-running compute first (so it runs while you write/read
 - Histogram PNG of grain volumes (analogue of thesis Fig 17)
 - K_eff log next to baseline Loeb (analogue of thesis Fig 18)
 - Use `merope.algo_fit_volumes_3D` to seed the Laguerre tessellation with the prescribed volumes
-**Expected time to write:** 30 min. **Run time:** ~30-40 min for both cases at n3D = 150.
+**Expected time to write:** 30 min. **Run time on 32 cores:** ~5 min for both cases at n3D = 150.
 
 ### 1.3 (Optional but cheap) Extend δ-sweep below 0.15
 Edit `experiments/run_keff_vs_delta.py`: prepend `0.05, 0.07, 0.09, 0.11, 0.13` to `DELTA_VALUES`. Run `bash run_keff_vs_delta.sh` (uses `--recover`, skips already-done cases).
-**Run time:** ~1-2 hr (15 new cases × ~5 min). Makes the per-p sigmoidal fit non-degenerate.
+**Run time on 32 cores:** ~5-10 min (15 new cases). Makes the per-p sigmoidal fit non-degenerate and removes the K_min lower-bound clamp now disclosed in §3.4.
 
 ⚠ **Resolution caveat** (per `01_theory.md` §4.1a, §02 §6a). With current `L = 10`, `n3D = 200` → $\Delta_\text{vox} = 0.05$, the GB layer at $\delta = 0.05$ is sampled by only **one voxel** (against the rule $\delta/\Delta_\text{vox} > 5$). At $\delta = 0.07$ it is 1.4 voxels. Below δ ≈ 0.25 the simulation relies entirely on the composite-voxel Voigt rule to capture the percolating crack — which is what `run_keff_vs_delta.py` already assumes for the lowest current point, $\delta = 0.15$ (3 voxels). So extending downward is consistent with the existing setup, but the fit-quality floor is the composite-voxel approximation, not the voxel grid. **Recommendation**: run the δ ∈ {0.05, 0.07, 0.09, 0.11, 0.13} extension at `n3D = 200` for consistency with the existing CSV; spot-check one point at `n3D = 400` to confirm the trend isn't a Voigt-rule artefact. If the spot check matches, proceed; if it diverges, the sigmoidal fit's low-δ asymptote $K_\text{min}(p)$ is upper-bounded by Voigt and shouldn't be reported as a converged number.
 
@@ -64,7 +64,7 @@ The paper claims distributed avg = 0.901, interconnected avg = 0.676. The archiv
 - **(b) Re-run optimisation** with current scoring; update Table 1 + the captioned best-slice numbers to match. ~4 hr per mode at `--n-calls 50 --n3d 120`. Can run during Phase 1 if there's CPU headroom.
 
 If neither approach works in reasonable time, **drop the avg-score numbers** from Table 1 and report only the per-slice (KS, χ²) p-values — those at least match `summary.txt`.
-**Time:** 30 min investigation + decision; up to 8 hr if re-running both modes.
+**Time:** 30 min investigation + decision; **~1-1.5 hr** if re-running both modes on 32 cores (each Bayesian iteration drops from ~4 min to ~1 min when AMITEX uses 8-16 cores).
 
 ### 2.4 Port thesis prose for §3.4.2 (Anisotropy) and §3.4.3 (Grain size)
 Source: `2025_07_Mattiuz_Thesis_01.pdf` pages 22-24. Translate to paper-quality English (the thesis prose is OK but bears editing). Apply UK English + plain hyphens per `~/research-manuscripts/writing_guidelines.md`.
@@ -154,12 +154,14 @@ Once Phases 1-4 are done, start fresh: a co-author review pass, journal-specific
 - Writing rules: `~/research-manuscripts/writing_guidelines.md`
 - Joint fit script: `~/Merope/project_root/experiments/fit_correction_factor_joint.py`
 
-## Estimated timeline if everything runs cleanly
+## Estimated timeline on the 32-core machine (revised 2026-04-30)
 
 | Phase | Compute | Writing | Wallclock |
 |---|---|---|---|
-| 1 (kick off) | 0 | 1-1.5 hr | 1.5 hr (then walk away) |
-| 2 (parallel) | 0-8 hr | 2-3 hr | 3 hr |
+| 1 (kick off) | ~30-45 min | 1-1.5 hr | 2 hr |
+| 2 (parallel) | 0-1.5 hr | 2-3 hr | 3 hr |
 | 3 (assembly) | 0 | 1-1.5 hr | 1.5 hr |
 | 4 (polish) | 0 | 30-45 min | 45 min |
-| **Total** | **3-12 hr (background)** | **5-7 hr (active)** | **~6-8 hr active wallclock** |
+| **Total** | **~30 min - 2 hr** | **5-7 hr** | **~7 hr active wallclock** |
+
+The compute axis collapses on 32 cores: per-case AMITEX runs are dominated by FFT (near-linear scaling), and a typical voxel grid (n3D = 150-200) finishes in well under a minute when AMITEX gets 8-16 ranks. So Phase 1 is "kick off and wait briefly" rather than "kick off and walk away".
