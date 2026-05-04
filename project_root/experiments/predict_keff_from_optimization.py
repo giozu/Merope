@@ -70,22 +70,14 @@ def predict_interconnected(p_boundary, p_intra, delta, coeffs=None):
     """
     Predict K_eff for interconnected morphology.
 
-    Parameters
-    ----------
-    p_boundary : float
-        Boundary/interconnected porosity (from optimization)
-    p_intra : float
-        Intra-granular porosity (from pore_analysis)
-    delta : float
-        Grain boundary thickness (optimized parameter)
-    coeffs : dict, optional
-        Linear coefficients ``{param: [slope, intercept]}`` for the sigmoid
-        parameters. If ``None``, loads from
-        ``Results_Sigmoidal_Fit/linear_coeffs.csv`` (joint-fit output).
-
-    Returns
-    -------
-    dict with K_eff prediction and breakdown
+    Returns two K_eff values:
+    - ``K_eff_amitex``: K_loeb(p_boundary) * K_delta. Matches the optimisation
+      RVE (boundary phase only), so it is directly comparable to the AMITEX
+      output in ``summary.txt``.
+    - ``K_eff_composite``: K_eff_amitex * (1 - 1.37 * p_intra). Adds an extra
+      Loeb factor for the experimentally observed intra-granular pores. This
+      represents the *real* material but is NOT comparable to the AMITEX run
+      in this study (which has no intra phase).
     """
     if coeffs is None:
         coeffs = load_sigmoid_coeffs()
@@ -95,27 +87,20 @@ def predict_interconnected(p_boundary, p_intra, delta, coeffs=None):
     b_coeff = coeffs["b"]
     delta_c_coeff = coeffs["delta_c"]
 
-    # Step 1: Loeb model for boundary porosity
     K_loeb_boundary = loeb_model(p_boundary)
-
-    # Step 2: Correction factor for morphology
     K_delta = sigmoid_correction(
         delta, p_boundary,
         k_min_coeff, k_max_coeff, b_coeff, delta_c_coeff
     )
 
-    # Step 3: Boundary contribution
-    K_boundary_contribution = K_loeb_boundary * K_delta
-
-    # Step 4: Add correction for intra-pores (simple Loeb)
-    # Intra pores are isolated, so use classical Loeb correction
-    K_eff = K_boundary_contribution * (1.0 - 1.37 * p_intra)
+    K_eff_amitex = K_loeb_boundary * K_delta
+    K_eff_composite = K_eff_amitex * (1.0 - 1.37 * p_intra)
 
     return {
-        "K_eff": K_eff,
+        "K_eff_amitex": K_eff_amitex,
+        "K_eff_composite": K_eff_composite,
         "K_loeb_boundary": K_loeb_boundary,
         "K_delta": K_delta,
-        "K_boundary_contribution": K_boundary_contribution,
         "p_boundary": p_boundary,
         "p_intra": p_intra,
         "p_total": p_boundary + p_intra,
@@ -253,27 +238,28 @@ def main():
         print()
 
         result = predict_interconnected(p_boundary, p_intra, delta)
+        morphology_penalty_pct = 100.0 * (1.0 - result['K_delta'])
 
         print("-" * 70)
         print("PREDICTION BREAKDOWN:")
         print("-" * 70)
-        print(f"1. Loeb model (boundary):      K = {result['K_loeb_boundary']:.4f}")
-        print(f"2. Morphology correction:      K_δ = {result['K_delta']:.4f}")
-        print(f"3. Boundary contribution:      K = {result['K_boundary_contribution']:.4f}")
-        print(f"4. Intra correction (×{1 - 1.37*p_intra:.3f}):   K = {result['K_eff']:.4f}")
+        print(f"1. Loeb model (boundary):       K_loeb  = {result['K_loeb_boundary']:.4f}")
+        print(f"2. Morphology correction:       K_delta = {result['K_delta']:.4f}")
+        print(f"3. AMITEX-comparable K_eff:     K_loeb * K_delta = {result['K_eff_amitex']:.4f}")
+        print(f"   (boundary phase only — matches optimisation RVE)")
+        print(f"4. Composite (with intra Loeb): K = {result['K_eff_composite']:.4f}")
+        print(f"   ( * (1 - 1.37 * p_intra={p_intra:.3f}); NOT comparable to AMITEX run)")
         print("-" * 70)
-        print(f"\n✓ PREDICTED K_eff = {result['K_eff']:.4f} W/m·K")
+        print(f"\n✓ K_eff (AMITEX-comparable)  = {result['K_eff_amitex']:.4f} W/m·K")
+        print(f"  K_eff (composite, w/ intra) = {result['K_eff_composite']:.4f} W/m·K")
         print()
 
-        # Compare with distributed (same total porosity)
-        p_total = p_boundary + p_intra
-        K_distributed = loeb_model(p_total)
-        reduction = (K_distributed - result['K_eff']) / K_distributed * 100
-
-        print(f"Comparison with distributed morphology (p={p_total:.1%}):")
-        print(f"  K_distributed = {K_distributed:.4f} W/m·K (Loeb classical)")
-        print(f"  K_interconnected = {result['K_eff']:.4f} W/m·K (with correction)")
-        print(f"  Reduction due to morphology: {reduction:.1f}%")
+        print(f"Morphology penalty at delta*={delta:.3f}, p_b={p_boundary:.1%}:")
+        print(f"  K_loeb (no correction)  = {result['K_loeb_boundary']:.4f}")
+        print(f"  K_eff (with K_delta)    = {result['K_eff_amitex']:.4f}")
+        print(f"  Penalty (1 - K_delta)   = {morphology_penalty_pct:.1f}%")
+        print(f"  (At delta* >> delta_c the sigmoid saturates and the penalty vanishes;")
+        print(f"   sub-percolation delta* would be needed for the historical 40% figure.)")
 
     else:  # distributed
         # From pore_analysis.py on distributed_77.png
@@ -311,12 +297,14 @@ def main():
             f.write(f"Boundary porosity: {p_boundary:.1%}\n")
             f.write(f"Intra porosity: {p_intra:.1%}\n")
             f.write(f"Total porosity: {p_boundary + p_intra:.1%}\n\n")
-            f.write(f"K_eff = {result['K_eff']:.4f} W/m·K\n\n")
+            f.write(f"K_eff (AMITEX-comparable)   = {result['K_eff_amitex']:.4f} W/m·K\n")
+            f.write(f"K_eff (composite, w/ intra) = {result['K_eff_composite']:.4f} W/m·K\n\n")
             f.write(f"Breakdown:\n")
-            f.write(f"  K_Loeb(boundary) = {result['K_loeb_boundary']:.4f}\n")
-            f.write(f"  K_delta = {result['K_delta']:.4f}\n")
-            f.write(f"  K_boundary = {result['K_boundary_contribution']:.4f}\n")
-            f.write(f"  K_eff (with intra) = {result['K_eff']:.4f}\n")
+            f.write(f"  K_Loeb(p_boundary={p_boundary:.3f}) = {result['K_loeb_boundary']:.4f}\n")
+            f.write(f"  K_delta(p_boundary, delta*={delta:.3f}) = {result['K_delta']:.4f}\n")
+            f.write(f"  K_eff_amitex   = K_Loeb * K_delta = {result['K_eff_amitex']:.4f}\n")
+            f.write(f"  K_eff_composite = K_eff_amitex * (1 - 1.37 * p_intra={p_intra:.3f}) = {result['K_eff_composite']:.4f}\n\n")
+            f.write(f"Morphology penalty (1 - K_delta): {100.0 * (1.0 - result['K_delta']):.1f}%\n")
         else:
             f.write(f"Total porosity: {p_total:.1%}\n\n")
             f.write(f"K_eff = {result['K_eff']:.4f} W/m·K\n")

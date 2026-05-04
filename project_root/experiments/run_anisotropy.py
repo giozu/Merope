@@ -162,8 +162,9 @@ def run_sweep(recover: bool = False, no_solver: bool = False) -> pd.DataFrame:
         print(f"[RECOVER] Loaded {len(existing)} existing rows from {csv_path}")
 
     if existing is not None:
-        existing = existing[existing["Kmean"] > 0.0].reset_index(drop=True)
-        print(f"[RECOVER] Kept {len(existing)} rows with non-zero Kmean (skipping failed cases)")
+        ax_cols = ["Kxx", "Kyy", "Kzz"]
+        existing = existing[existing[ax_cols].min(axis=1) > 0.01].reset_index(drop=True)
+        print(f"[RECOVER] Kept {len(existing)} rows where all axes converged (skipping full and single-axis failures)")
     rows = [] if existing is None else existing.to_dict("records")
 
     def is_done(gamma, phi):
