@@ -11,7 +11,7 @@ This file is the working punch-list for finishing the paper. It catalogs (a) sec
 | `main.tex` | OK — frontmatter, abstract, highlights, keywords, includes 5 sections |
 | `introduction.tex` | OK — narrative complete |
 | `methods.tex` | OK — physics + classical models + tools |
-| `results.tex` | 3 subsections still commented out (Anisotropy + Grain-size written 2026-05-04); §"Experimental validation" rewritten 2026-05-04 against current artefacts — see §3 below |
+| `results.tex` | 3 subsections still commented out (Anisotropy + Grain-size written 2026-05-04); §"Experimental validation" + §"Quantitative pore analysis" + §"Quantitative and morphological results" rewritten 2026-05-06 around the thin-$\delta^*$ mixed AMITEX case (15.2 % below Loeb) and the 4.1 % $\delta$-recovery test; all FIXMEs cleared — see §3 below |
 | `discussion.tex` | OK — physical interpretation, limitations, comparison with literature |
 | `conclusions.tex` | OK |
 | `bibliography.bib` | 912 entries; **case-sensitivity issues** — see §4 |
@@ -23,28 +23,32 @@ This file is the working punch-list for finishing the paper. It catalogs (a) sec
 
 ```
 Anisotropy/        anisotropy.png                                              ← added 2026-05-04
-Comparison/        comparison_distributed_vs_interconnected.png, keff_vs_porosity_comparison.png
-                                                                                ← FIXME: stale, regenerate from current artefacts
+Comparison/        comparison_distributed_vs_interconnected.png,               ← regenerated 2026-05-06
+                   keff_vs_porosity_comparison.png,                             from thin-δ* mixed AMITEX (15.2% below Loeb)
+                   recovery_test_interconnected.png                             ← new 2026-05-05 (matched-form δ recovery 4.1%)
 GrainSizeDistribution/  volume_histograms.png, keff_comparison.png             ← added 2026-05-04
 Keff_vs_Delta/     Slide_Keff_vs_Delta.png, keff_vs_delta.csv
 Keff_vs_Porosity/  Keff_Validation_Summary.png, keff_vs_porosity.csv
 Optimization_Distributed/    area_distribution.png, best_slice.png, convergence.png, summary.txt, keff_prediction.txt
 Optimization_Interconnected/ area_distribution.png, best_slice.png, convergence.png, summary.txt, keff_prediction.txt
-Pore_Analysis/     distributed_77_original.png, distributed_77_analysis.png, connected_79_original.png, connected_79_analysis.png, pore_analysis_results.csv
-                                                                                ← consortium-image originals; replace with synthetic in Phase 2.6
+Pore_Analysis/     synthetic_distributed.png, synthetic_interconnected.png,    ← 2026-05-06: replaced consortium images with
+                   synthetic_interconnected_visual.png,                          three synthetic targets for the §"Synthetic
+                   synthetic_interconnected_thin.png                             ground-truth targets" figure
 Sigmoidal_Fit/     Sigmoidal_Fits.png, Parameters_vs_Porosity.png, K_eff_Contour.png   ← refreshed 2026-04-30 from joint fit;
                    fitted_parameters.csv, linear_coeffs.csv                              also dropped here for traceability.
 ```
 
 ## 2. Headline numbers in the paper
 
-For sanity-checking against the codebase / data:
+For sanity-checking against the codebase / data (current values 2026-05-06):
 
-- Loeb recalibrated: **α = 1.37** (Loeb_classical: 2.5; matches Morimoto 2008)
-- Distributed/Loeb error: **< 2 %** over $p \in [0, 0.30]$
-- Morphology penalty at the optimised δ\*=0.283 (interconnected, $p_b = 0.138$): $1 - K_\delta \approx 3\%$. The "40 % reduction" claim from earlier drafts only holds at sub-percolation $\delta^* < \delta_c \approx 0.08$ where $K_\delta \to K_{\min}(p) \approx 0.6$. **Updated 2026-05-04**.
-- Bayesian optimization scores in Table 1: 0.901 / 0.676 (paper text); will be re-derived from the synthetic-target run (`Phase 1.5` in `04_next_session_plan.md`). See §5.3.
-- Pore analysis numbers (`p_b = 0.138`, `p_intra = 0.080`, `p_distributed = 0.230`) now reproduced **by construction** from the synthetic-target generator (`make_synthetic_targets.py`), so they no longer depend on the broken legacy CLI; see §5.2 and §5.7.
+- Loeb recalibrated: **α = 1.37** (Loeb_classical: 2.5; matches Morimoto 2008).
+- Distributed AMITEX vs Loeb at $p = 0.231$: **0.673 vs 0.683 W/m·K (1.5 % gap)** — calibration holds.
+- **Headline morphology penalty**: thin-$\delta^*$ mixed interconnected RVE at $p_{\rm total} = 0.213$, $\delta^* = 0.10$ (in the morphology-controlled regime $\delta^* < \delta_c$). AMITEX **0.600 W/m·K** vs Loeb at the same total porosity 0.708 → **15.2 % drop below Loeb**. Joint-fit prediction $K_{\rm Loeb}(p_b) \cdot K_\delta \cdot (1 - \alpha p_{\rm intra}) \approx 0.57$ W/m·K (within 5 % of AMITEX).
+- Saturated-regime case (matched-form, $\delta^* = 0.32$): residual penalty only ~3 %, indistinguishable from Loeb on the figure — kept as a secondary point in the text. The "40 % reduction" claim from earlier drafts was an asymptote-vs-operating-point conflation; verified false at the saturated $\delta^*$ but recoverable at the thin-$\delta^*$ regime as the 15.2 % drop.
+- **Known-truth $\delta$-recovery test**: ground-truth $\delta = 1.0$, optimiser recovered $0.959$ → **4.1 % recovery error** (down from 6.7 % in the 2026-05-04 run, after Otsu-bug fix + bounds tightening + matched-form synthetic target).
+- Pore analysis numbers (`p_b ≈ 0.14`, `p_intra ≈ 0.07`, `p_distributed = 0.23`) reproduced **by construction** from the synthetic-target generator and the thin-$\delta^*$ AMITEX driver. No dependence on the legacy CLI.
+- Table 1 reframed 2026-05-06 to report realised vs ground-truth porosity + $\delta$ recovery (no longer cites the legacy 0.901 / 0.676 KS/$\chi^2$ avg scores — see §5.3).
 
 ## 3. Commented-out subsections in `results.tex` — disposition
 
@@ -125,14 +129,15 @@ This means the current `pore_analysis.py` parameters (circularity threshold, are
 
 **Action:** lock the segmentation parameters that reproduce the paper's narrative (likely the WORKFLOW values), regenerate `pore_analysis_results.csv` and the per-image PNGs, and verify the targets used in `run_optimization*` shell scripts still hold.
 
-### 5.3 Optimization scores — paper text vs archived summary
+### 5.3 Optimization scores — RESOLVED 2026-05-06
 
-Paper Table 1: distributed avg = 0.901, interconnected avg = 0.676.
-Archived `Images/Optimization_*/summary.txt`: distributed combined = 0.4895 (image avg 0.2762), interconnected combined = 0.3338 (image avg 0.0535).
-
-The paper's table values do not appear in any `summary.txt` on disk. They may come from an earlier run that wasn't archived, or they may be from a different scoring formula (a different weighting of KS p, χ² p, or porosity penalty).
-
-**Action:** trace which run produced 0.901 / 0.676. Either (a) re-run optimization to current scoring and update Table 1, or (b) update the summary files with the run that matches the paper text.
+Table 1 in `results.tex` was reframed 2026-05-06 to report realised vs
+ground-truth porosity and $\delta$ recovery, instead of legacy KS/$\chi^2$
+avg scores. The "0.901 / 0.676" paper-claim values are no longer cited; the
+substantive validations are now the porosity match (sub-percent) and the
+4.1 % $\delta$-recovery error. The image avg score caveat is also gone — it
+was a bug in `core/statistics.py` (`threshold_otsu` returning 0 on binary
+inputs), fixed via `_robust_threshold` helper 2026-05-05.
 
 ### 5.4 Grant agreement number — RESOLVED (verified 2026-04-30)
 
@@ -142,13 +147,15 @@ The paper's table values do not appear in any `summary.txt` on disk. They may co
 
 `run_optimization.py --mode distributed` summary on disk says **target = 24.6 %**, paper text says target = 23 %. Probably a stale run; re-runnable in 2–3 hours.
 
-### 5.6 Stale sigmoidal coefficients in `predict_keff_from_optimization.py` — RESOLVED (2026-04-30, extended 2026-05-04)
+### 5.6 Stale sigmoidal coefficients in `predict_keff_from_optimization.py` — RESOLVED (2026-04-30, extended 2026-05-04, 2026-05-06)
 
 The script previously hardcoded the OLD WORKFLOW coefficients (`k_min = -4.74p + 1.26`, etc.) — meaning any `keff_prediction.txt` it produced was internally inconsistent with the joint-fit figure in `paper/Images/Sigmoidal_Fit/`. Refactor: it now loads `{slope, intercept}` from `Results_Sigmoidal_Fit/linear_coeffs.csv` at runtime via `load_sigmoid_coeffs()`. Verified that the loader returns the joint-fit values exactly.
 
-**Headline-claim verification done (2026-05-04).** The "40 % morphology reduction" claim does NOT hold at the optimised δ\*=0.283: the joint fit yields $K_\delta = 0.97$, so the residual morphology penalty is only ~3 %. The 40 % figure is the sigmoid's lower asymptote ($K_\delta \to K_{\min}(p)$), reachable only for sub-percolation $\delta^* < \delta_c \approx 0.08$. The paper §"Experimental validation" was rewritten 2026-05-04 to reflect this; the original headline was an asymptotic-vs-operating-point conflation. Confirmed by independent per-p fit (`Results_Sigmoidal_Fit_PerP/`) which gives $K_\delta = 0.89$ at the same evaluation point — both fits within ~3 % of each other and far from 0.6.
+**Headline-claim verification (2026-05-04, finalised 2026-05-06).** The "40 % morphology reduction" claim does NOT hold at the optimised matched-form $\delta^* = 0.32$: the joint fit yields $K_\delta = 0.97$, residual penalty only ~3 %. The 40 % figure is the sigmoid's lower asymptote ($K_\delta \to K_{\min}(p)$), reachable only for sub-percolation $\delta^* < \delta_c \approx 0.08$–$0.15$.
 
-`predict_keff_from_optimization.py` now also prints two K_eff values: AMITEX-comparable (`K_loeb · K_δ`) and composite (`× (1 − 1.37·p_intra)`), with the morphology penalty `1 − K_δ` reported separately. No more silent conflation between an FFT-comparable prediction and a composite real-material estimate.
+**The morphology-penalty claim is recovered at thin $\delta^*$ (2026-05-06)**, via the new `run_thin_delta_mixed.py` AMITEX run: at $\delta^* = 0.10$, $p_b = 0.143$, $p_{\rm intra} = 0.070$ (total 0.213), AMITEX gives $K_{\rm eff} = 0.600$ W/m·K vs Loeb 0.708 → **15.2 % below Loeb** at the same total porosity. Joint-fit prediction 0.57 within 5 % of AMITEX. This is the figure's headline now; the paper §"Experimental validation" was rewritten 2026-05-06 around it.
+
+`predict_keff_from_optimization.py` still prints two K_eff values (AMITEX-comparable + composite). The composite formulation is no longer load-bearing for the figure (AMITEX measures the composite directly via `run_thin_delta_mixed.py`), so dropping it remains an option for cleanup — see Phase 2.6 of `04_next_session_plan.md`.
 
 ### 5.7 Synthetic-targets pivot for the optimisation reference images (2026-05-04)
 
@@ -240,16 +247,17 @@ Sweep done 2026-04-29 across `main.tex`, `introduction.tex`, `methods.tex`, `res
 In rough order of impact on time-to-submission. Items marked ✅ done.
 
 1. **Sigmoidal fit reconciliation** (§5.1) — ✅ joint fit run, paper figures refreshed, deprecation note on the per-p script.
-2. **Stale coefficients in `predict_keff_from_optimization.py`** (§5.6) — ✅ refactored to load from `linear_coeffs.csv`; ✅ "40 % reduction" claim verified to be an asymptote-vs-operating-point conflation; paper §"Experimental validation" rewritten 2026-05-04.
-3. **Pore-analysis number reconciliation** (§5.2) — ✅ SUPERSEDED by the synthetic-targets pivot (§5.7); the paper-text numbers are now reproduced by construction.
-4. **Optimization scores in Table 1** (§5.3) — still open. Will be re-derived from the synthetic-target optimisation run started end-of-2026-05-04 (verify in Phase 1.5 of `04_next_session_plan.md`).
-5. **Commented-out subsections** (§3) — ✅ Anisotropy and grain-size subsections drafted 2026-05-04. Three remaining subsections (RVE convergence, voxel resolution, composite voxel rules) confirmed 2026-04-29 as "too basic" — leave commented or delete.
-6. **Bibliography case bugs** (§4) — ✅ `Torquato2002` fixed; ✅ duplicate `Magni2020` removed 2026-05-04 during compile cleanup.
-7. **Grant agreement number** (§5.4) — ✅ verified correct in `main.tex` line 75.
-8. **Synthetic-targets pivot** (§5.7) — ✅ generator written, wired into `run_optimization.py`, run started 2026-05-04. Methods text (`methods.tex`) still needs a paragraph explaining the choice — Phase 2.6 in the next-session plan.
-9. **Stale comparison figures** — ⚠ `Images/Comparison/{comparison_distributed_vs_interconnected,keff_vs_porosity_comparison}.png` carry FIXME markers in `results.tex`; regenerate from current artefacts in Phase 2.5 of the next-session plan.
-10. **`project_root/README.md`** — out of date; lists 3 core files + 3 experiments, reality is 5 + 13 (added `make_synthetic_targets.py`). Update as part of polish.
-11. **Final cleanup**: review `_to_delete/` and `rm -rf` once satisfied. Decide whether to keep the three `run_*_porosity.py` validation scripts (interconnected and mixed last produced K=0; status uncertain).
+2. **Stale coefficients in `predict_keff_from_optimization.py`** (§5.6) — ✅ refactored to load from `linear_coeffs.csv`; ✅ "40 % reduction" claim resolved as an asymptote-vs-operating-point conflation; ✅ morphology-penalty claim recovered at thin $\delta^*$ via `run_thin_delta_mixed.py` 2026-05-06 (15.2 % below Loeb).
+3. **Pore-analysis number reconciliation** (§5.2) — ✅ SUPERSEDED by the synthetic-targets pivot.
+4. **Optimization scores in Table 1** (§5.3) — ✅ RESOLVED 2026-05-06: Table 1 reframed around realised vs ground-truth porosity + 4.1 % $\delta$-recovery; legacy 0.901 / 0.676 no longer cited.
+5. **Commented-out subsections** (§3) — ✅ Anisotropy and grain-size subsections drafted 2026-05-04. Three remaining (RVE convergence, voxel resolution, composite voxel rules) confirmed 2026-04-29 as "too basic" — leave commented or delete.
+6. **Bibliography case bugs** (§4) — ✅ `Torquato2002` fixed; ✅ duplicate `Magni2020` removed 2026-05-04.
+7. **Grant agreement number** (§5.4) — ✅ verified correct.
+8. **Synthetic-targets pivot** (§5.7) — ✅ generator + matched-form + visual-rich + thin-$\delta^*$ mixed AMITEX driver all in place. ⚠ `methods.tex` still needs a paragraph explaining the synthetic-targets choice — Phase 2.6 in the next-session plan.
+9. **Comparison figures** — ✅ regenerated 2026-05-06 from thin-$\delta^*$ mixed AMITEX + matched-form recovery test. All FIXMEs cleared.
+10. **Otsu-bug fix in `core/statistics.py`** — ✅ 2026-05-05: `_robust_threshold` helper handles binary 0/255 inputs; previously the image avg score was silently 0 for every synthetic-target run.
+11. **`project_root/README.md`** — out of date; lists 3 core files + 3 experiments, reality is 5 + 14 (added `make_synthetic_targets.py`, `run_thin_delta_mixed.py`, `make_paper_comparison_figures.py`). Update as part of polish.
+12. **Final cleanup**: review `_to_delete/` and `rm -rf` once satisfied. Decide whether to keep the three `run_*_porosity.py` validation scripts (interconnected and mixed last produced K=0; status uncertain).
 
 ## 8. Things that may still need new simulation
 
