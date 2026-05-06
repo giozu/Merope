@@ -16,7 +16,9 @@ For high‑porosity engineered fuels (10–30 %), the classical Loeb correlation
 
 This work is **WP 8 / WP 8.2.3** of the **ESFR‑SIMPLE** Horizon Europe / EURATOM project (European Sodium Fast Reactor — Safety by Innovative Monitoring, Power Level flexibility and Experimental research).
 
-**Grant Agreement: n°101059543** (EURATOM 2021‑2025, confirmed via CORDIS and the project's own site at <https://esfr-simple.eu/>). The current paper draft has **n°101166386** in the Acknowledgements — that is a typo and must be replaced before submission. The Mattiuz thesis Italian abstract has the correct number.
+**Grant Agreement: n°101059543** (EURATOM 2021‑2025, confirmed via CORDIS and the project's own site at <https://esfr-simple.eu/>). Verified correct in `main.tex` line 75 (the earlier draft typo `n°101166386` has since been fixed).
+
+⚠ **The two reference SEM images** that drive the Bayesian optimisation (`exp_img/connected_79.png`, `exp_img/distributed_77.png`) come from `~/Merope/old_files/ESFR_SIMPLE_Monitoring_Meeting_3_WP8.pptx` (slides 12-14: real CEA Marcoule MOX specimens fabricated for Subtask 8.2.2; characterisation was "on going" at the meeting; planned JRC Karlsruhe $K_{\text{eff}}$ measurements never landed). The deck is private consortium material — these images **cannot be reproduced in a journal paper without rights clearance**. Pivot 2026-05-04: build fully reproducible synthetic targets that hit the same nominal porosity values (`make_synthetic_targets.py`); see `03_paper_and_open_issues.md` §5.7.
 
 ## Authors and history
 
@@ -37,8 +39,8 @@ Material constants used throughout: $\kappa_m = 1.0$ (normalized matrix), $\kapp
 
 1. **Loeb recalibrated**: $\alpha = 1.37$ (vs IAEA 2.5) gives < 2 % error over $p \in [0, 0.30]$ for distributed porosity. Matches Morimoto et al. (2008) for $(U,Pu,Am)O_2$.
 2. **Sigmoidal correction factor** $K_\delta(p, \delta^*)$ applied as $K_{\text{eff}} = K_{\text{Loeb}}(p) \cdot K_\delta(p,\delta^*)$, where $\delta^* = \delta / L_{\text{grain}}$ is the normalized grain‑boundary thickness. Captures the smooth transition from crack‑dominated ($\delta^* < 0.2$) to distributed‑like ($\delta^* > 0.5$) regimes. **Canonical joint-fit parameters (2026-04-30, 47-point CSV)**: $K_{\min}(p) = 0.85 - 2.50p$, $K_{\max}(p) = 0.996 - 0.203p$, $b(p) = -25.96 - 1.00p$, $\delta_c(p) = 0.008 + 0.530p$. See `Results_Sigmoidal_Fit/linear_coeffs.csv` (top-level).
-3. **40 % drop in $K_{\text{eff}}$** for interconnected vs distributed morphology at the same total porosity ($p \approx 22\%$): $0.606$ vs $1.00$ (normalized). Loeb alone cannot predict this; the sigmoidal correction can.
-4. **Bayesian optimization works**: synthetic 3D RVEs whose 2D slices statistically match SEM images (KS + $\chi^2$ p‑values > 0.7).
+3. **Morphology penalty is sharp but gated by $\delta^*$**: the sigmoidal correction predicts up to $1 - K_{\min}(p) \approx 40\%$ reduction at sub-percolation thicknesses ($\delta^* < \delta_c \approx 0.08$), but only $\sim 3\%$ at the experimentally calibrated $\delta^* = 0.283$ where $K_\delta \approx 0.97$. The original "40 % at $p \approx 22\%$" claim was an asymptote-vs-operating-point conflation (corrected 2026-05-04). The design lever is therefore $\delta^*$ itself, not "interconnected vs distributed" as a categorical statement.
+4. **Bayesian optimization works**: synthetic 3D RVEs whose 2D slices statistically match a target image (KS + $\chi^2$ p‑values > 0.7). Reference targets are now reproducible synthetic microstructures (`make_synthetic_targets.py`, default since 2026-05-04) rather than the private ESFR-SIMPLE consortium SEMs (which remain on disk for comparison runs only).
 
 ## What's drafted vs what's loose
 

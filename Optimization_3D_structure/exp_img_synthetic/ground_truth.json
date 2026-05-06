@@ -1,0 +1,174 @@
+{
+  "common": {
+    "L_DIM": [
+      10.0,
+      10.0,
+      10.0
+    ],
+    "N_VOX": 400,
+    "SEED": 42,
+    "SLICE_AXIS": 2,
+    "PORE_THRESHOLD": 1.5
+  },
+  "distributed": {
+    "RADII": [
+      0.15,
+      0.2,
+      0.25,
+      0.32
+    ],
+    "TARGET_P_TOTAL": 0.23,
+    "RADIUS_BINS": [
+      [
+        0.15,
+        0.0575
+      ],
+      [
+        0.2,
+        0.0575
+      ],
+      [
+        0.25,
+        0.0575
+      ],
+      [
+        0.32,
+        0.0575
+      ]
+    ],
+    "REALISED_3D_P": 0.2298099375,
+    "REALISED_SLICE_P": 0.23441875,
+    "output_png": "synthetic_distributed.png"
+  },
+  "interconnected": {
+    "LAG_R": 3.0,
+    "LAG_PHI": 1.0,
+    "DELTA_CANONICAL": 1.0,
+    "BOUND_RADII": [
+      0.4
+    ],
+    "BOUND_RAW_TARGET_P": 0.22,
+    "BOUND_TARGET_P_NOMINAL": 0.14,
+    "BOUND_RADIUS_BINS": [
+      [
+        0.4,
+        0.22
+      ]
+    ],
+    "INTRA_RADII": [
+      0.12
+    ],
+    "INTRA_TARGET_P": 0.0,
+    "INTRA_RADIUS_BINS": [
+      [
+        0.12,
+        0.0
+      ]
+    ],
+    "DELTA": 1.0,
+    "REALISED_3D_P_BOUNDARY": 0.138829515625,
+    "REALISED_3D_P_INTRA": 0.0,
+    "REALISED_3D_P_COMBINED": 0.138829515625,
+    "REALISED_SLICE_P": 0.12060625,
+    "output_png": "synthetic_interconnected.png",
+    "delta_sweep": [
+      {
+        "DELTA": 0.3,
+        "DELTA_STAR": 0.09999999999999999,
+        "REALISED_3D_P_BOUNDARY": 0.047942859375,
+        "REALISED_3D_P_INTRA": 0.0,
+        "REALISED_3D_P_COMBINED": 0.047942859375,
+        "REALISED_SLICE_P": 0.0396,
+        "output_png": "synthetic_interconnected_delta_0p3.png"
+      },
+      {
+        "DELTA": 0.6,
+        "DELTA_STAR": 0.19999999999999998,
+        "REALISED_3D_P_BOUNDARY": 0.091422046875,
+        "REALISED_3D_P_INTRA": 0.0,
+        "REALISED_3D_P_COMBINED": 0.091422046875,
+        "REALISED_SLICE_P": 0.06904375,
+        "output_png": "synthetic_interconnected_delta_0p6.png"
+      },
+      {
+        "DELTA": 1.0,
+        "DELTA_STAR": 0.3333333333333333,
+        "REALISED_3D_P_BOUNDARY": 0.138829515625,
+        "REALISED_3D_P_INTRA": 0.0,
+        "REALISED_3D_P_COMBINED": 0.138829515625,
+        "REALISED_SLICE_P": 0.12060625,
+        "output_png": "synthetic_interconnected_delta_1.png"
+      },
+      {
+        "DELTA": 1.5,
+        "DELTA_STAR": 0.5,
+        "REALISED_3D_P_BOUNDARY": 0.178817828125,
+        "REALISED_3D_P_INTRA": 0.0,
+        "REALISED_3D_P_COMBINED": 0.178817828125,
+        "REALISED_SLICE_P": 0.166025,
+        "output_png": "synthetic_interconnected_delta_1p5.png"
+      }
+    ]
+  },
+  "interconnected_visual": {
+    "purpose": "Visual-rich variant for the paper figure only; NOT used as the optimisation target.",
+    "LAG_R": 3.0,
+    "LAG_PHI": 1.0,
+    "DELTA": 1.0,
+    "BOUND_RADII": [
+      0.2,
+      0.3,
+      0.42,
+      0.55
+    ],
+    "BOUND_RAW_TARGET_P": 0.22,
+    "BOUND_RADIUS_BINS": [
+      [
+        0.2,
+        0.055
+      ],
+      [
+        0.3,
+        0.055
+      ],
+      [
+        0.42,
+        0.055
+      ],
+      [
+        0.55,
+        0.055
+      ]
+    ],
+    "INTRA_RADII": [
+      0.08,
+      0.1,
+      0.13,
+      0.16
+    ],
+    "INTRA_TARGET_P": 0.08,
+    "INTRA_RADIUS_BINS": [
+      [
+        0.08,
+        0.02
+      ],
+      [
+        0.1,
+        0.02
+      ],
+      [
+        0.13,
+        0.02
+      ],
+      [
+        0.16,
+        0.02
+      ]
+    ],
+    "REALISED_3D_P_BOUNDARY": 0.141500359375,
+    "REALISED_3D_P_INTRA": 0.07998378125,
+    "REALISED_3D_P_COMBINED": 0.210094375,
+    "REALISED_SLICE_P": 0.1994375,
+    "output_png": "synthetic_interconnected_visual.png"
+  }
+}

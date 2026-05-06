@@ -44,6 +44,23 @@ import matplotlib.pyplot as plt
 # Low-level feature extractors
 # ---------------------------------------------------------------------------
 
+def _robust_threshold(arr: np.ndarray) -> float:
+    """Pore/matrix split that survives binary inputs.
+
+    `threshold_otsu` returns 0 on a perfectly bimodal `[0, 255]` image because
+    its inter-class-variance maximum is degenerate; downstream `arr < 0`
+    then selects no pixels at all and pore detection silently returns empty.
+    For binary or near-binary inputs (≤ 2 unique values) we fall back to the
+    midpoint of the two intensities; otherwise we use Otsu as before.
+    """
+    unique = np.unique(arr)
+    if unique.size <= 2:
+        if unique.size == 1:
+            return float(unique[0]) - 0.5     # all-one-value image: degenerate, no pores
+        return float(unique.mean())            # midpoint of the two grey levels
+    return float(threshold_otsu(arr))
+
+
 def _normalize(arr: np.ndarray) -> np.ndarray:
     """Min-max rescale *arr* to [0, 255] uint8.
 
@@ -81,7 +98,7 @@ def extract_pore_sizes(
     """
     img = Image.open(image_path).convert("L")
     arr = _normalize(np.array(img))           # contrast-normalize before Otsu
-    thresh = threshold_otsu(arr)
+    thresh = _robust_threshold(arr)
     binary = arr < thresh                     # pores are dark
     labeled = label(binary)
     props = regionprops(labeled)
@@ -102,7 +119,7 @@ def count_pores_in_grid(image_path: str, grid_size: int = 20) -> np.ndarray:
     """
     img = Image.open(image_path).convert("L")
     arr = _normalize(np.array(img))           # contrast-normalize before Otsu
-    thresh = threshold_otsu(arr)
+    thresh = _robust_threshold(arr)
     binary = arr < thresh
     labeled = label(binary)
     props = regionprops(labeled)
@@ -300,7 +317,7 @@ def plot_area_distribution(
     def _areas(path: str, thr: int) -> List[float]:
         img = Image.open(path).convert("L")
         arr = _normalize(np.array(img))
-        thresh = threshold_otsu(arr)
+        thresh = _robust_threshold(arr)
         binary = arr < thresh
         lbl = label(binary)
         return [p.area for p in regionprops(lbl) if p.area >= thr]
@@ -322,25 +339,42 @@ def plot_area_distribution(
     xlabel = "Pore area [µm²]" if use_physical else "Pore area [pixel²]"
 
     all_vals = np.concatenate([areas_sim_um2, areas_exp_um2])
-    bins = np.linspace(0, np.percentile(all_vals, 99.5), 81) if all_vals.size else 80
+    if all_vals.size:
+        # Tight x-range (95th percentile drops the long single-count tail) and
+        # log-spaced bins so each order of magnitude in pore area gets equal
+        # resolution. Floor at the minimum positive value to keep log-axis happy.
+        positive = all_vals[all_vals > 0]
+        x_lo = max(positive.min(), 1e-4) if positive.size else 1e-4
+        x_hi = np.percentile(all_vals, 95)
+        if x_hi <= x_lo:
+            x_hi = x_lo * 10.0
+        bins = np.geomspace(x_lo, x_hi, 41)
+    else:
+        bins = 40
+        x_lo, x_hi = 1e-4, 1.0
 
     fig, ax = plt.subplots(figsize=(9, 6))
-    ax.hist(areas_sim_um2, bins=bins, alpha=0.55, log=True, label="Simulated slice",
-            color="steelblue")
-    ax.hist(areas_exp_um2, bins=bins, alpha=0.55, log=True, label="Experimental",
-            color="darkorange")
+    # Experimental first (typically more populated), simulated overlaid on top
+    # so the smaller distribution stays visible.
+    ax.hist(areas_exp_um2, bins=bins, alpha=0.7, log=True, label="Experimental",
+            color="darkorange", edgecolor="black", linewidth=0.4)
+    ax.hist(areas_sim_um2, bins=bins, alpha=0.7, log=True, label="Simulated slice",
+            color="steelblue", edgecolor="black", linewidth=0.4)
     ax.axvline(x=thr_um2, color="red", linestyle="--",
                linewidth=1.5,
-               label=f"Threshold ({thr_um2:.0f} µm²)" if use_physical
+               label=f"Threshold ({thr_um2:.2g} µm²)" if use_physical
                      else f"Threshold ({area_threshold} px²)")
+    ax.set_xscale("log")
+    ax.set_xlim(x_lo, x_hi)
     ax.set_xlabel(xlabel)
     ax.set_ylabel("Counts (log)")
     ax.set_title("Pore area distribution: simulation vs experiment")
-    ax.legend()
-    ax.grid(True, linestyle="--", alpha=0.4)
+    ax.legend(loc="upper right")
+    ax.grid(True, which="both", linestyle="--", alpha=0.4)
 
     if use_physical:
         ax2 = ax.twiny()
+        ax2.set_xscale("log")
         ax2.set_xlim(np.array(ax.get_xlim()) / exp_um_per_px ** 2)
         ax2.set_xlabel("Pore area [pixel² — exp. scale]", fontsize=9, color="gray")
         ax2.tick_params(axis="x", labelsize=8, colors="gray")
