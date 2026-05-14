@@ -423,7 +423,7 @@ def plot_slide(df, output_dir):
 
     ax.set_xlabel(r"$\delta$", fontsize=12)
     ax.set_ylabel(r"$K_{eff}$ [W/mK]", fontsize=12)
-    ax.set_title(r"$K_\mathrm{eff}$ vs $\delta$ — crack-to-sphere transition", fontsize=13)
+    # ax.set_title(r"$K_\mathrm{eff}$ vs $\delta$ — crack-to-sphere transition", fontsize=13)
     ax.grid(True, linestyle="--", alpha=0.4, color="grey")
     ax.set_xlim(0, df["Delta"].max() * 1.05)
     ax.set_ylim(max(0.0, df["K_eff"].min() - 0.05), 1.05)

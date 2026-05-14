@@ -171,7 +171,7 @@ def plot_fits(df, coeffs, output_dir, lag_r=1.0):
 
     ax.set_xlabel(r"$\delta^* = \delta / L_{grain}$")
     ax.set_ylabel(r"$K_{eff}$ (W/m·K)")
-    ax.set_title("Joint sigmoidal fit (linear-in-p parameters)")
+    # ax.set_title("Joint sigmoidal fit (linear-in-p parameters)")
     ax.grid(alpha=0.3)
     ax.legend(fontsize=9)
     out = output_dir / "Sigmoidal_Fits.png"
@@ -193,7 +193,7 @@ def plot_parameters(per_p, coeffs, output_dir):
         ax.scatter(per_p["p"], per_p[name], color="red")
         ax.set_xlabel("p")
         ax.set_ylabel(name)
-        ax.set_title(f"{name}(p)")
+        # ax.set_title(f"{name}(p)")
         ax.legend(loc="best", fontsize=9)
         ax.grid(alpha=0.3)
     fig.tight_layout()
@@ -219,7 +219,7 @@ def plot_contour(coeffs, output_dir):
     fig.colorbar(cp, label=r"$K_{eff}$")
     ax.set_xlabel("Porosity p")
     ax.set_ylabel(r"$\delta^* = \delta/L_{grain}$")
-    ax.set_title("Joint-fit contour")
+    # ax.set_title("Joint-fit contour")
     out = output_dir / "K_eff_Contour.png"
     fig.savefig(out, dpi=300)
     plt.close(fig)

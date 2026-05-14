@@ -657,7 +657,7 @@ def main() -> None:
                 linewidth=1.2, label=f"Best = {best_score:.4f}")
     plt.xlabel("Optimization call")
     plt.ylabel("Combined score")
-    plt.title(f"Bayesian Optimization convergence — {mode}")
+    # plt.title(f"Bayesian Optimization convergence — {mode}")
     plt.legend()
     plt.grid(True, linestyle="--", alpha=0.4)
     plt.tight_layout()

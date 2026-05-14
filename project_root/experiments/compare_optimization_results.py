@@ -193,7 +193,7 @@ def main():
     ax.bar(x, intra, width, bottom=boundary, label='Intra (isolated)', color='#1f77b4')
 
     ax.set_ylabel('Porosity (%)')
-    ax.set_title('Porosity Composition')
+    # ax.set_title('Porosity Composition')
     ax.set_xticks(x)
     ax.set_xticklabels(samples)
     ax.legend()
@@ -216,7 +216,7 @@ def main():
                 ha='center', va='bottom', fontweight='bold')
 
     ax.set_ylabel('K_eff (W/m·K)')
-    ax.set_title('Effective Thermal Conductivity')
+    # ax.set_title('Effective Thermal Conductivity')
     ax.set_ylim([0, max(K_values) * 1.2])
     ax.grid(axis='y', alpha=0.3)
 
@@ -290,7 +290,7 @@ def main():
     
     ax2.set_xlabel('Porosity (-)', fontsize=14)
     ax2.set_ylabel('K$_{eff}$ (W/m·K)', fontsize=14)
-    ax2.set_title('Effective Thermal Conductivity vs Porosity', fontsize=16, fontweight='bold')
+    # ax2.set_title('Effective Thermal Conductivity vs Porosity', fontsize=16, fontweight='bold')
     ax2.legend(loc='upper right', fontsize=11, framealpha=0.95)
     ax2.grid(True, alpha=0.3, linestyle='--')
     # ax2.set_xlim([0.10, 0.30])

@@ -172,7 +172,7 @@ def main() -> None:
     plt.grid(True, linestyle="--", alpha=0.5)
     plt.xlabel("Porosità (Frazione di Volume)")
     plt.ylabel("Conduttività Termica Efficace (K_eff)")
-    plt.title("Validazione: Porosità Distribuita vs Maxwell–Eucken")
+    # plt.title("Validazione: Porosità Distribuita vs Maxwell–Eucken")
     plt.legend()
 
     # Save plot
@@ -193,7 +193,7 @@ def main() -> None:
     plt.grid(True, linestyle="--", alpha=0.5)
     plt.xlabel("Rapporto L_RVE / R_pore")
     plt.ylabel("Conduttività Termica Efficace (K_eff)")
-    plt.title("K_eff vs Rappresentatività (L_RVE / R_pore)")
+    # plt.title("K_eff vs Rappresentatività (L_RVE / R_pore)")
     plt.legend()
     img_path = output_dir / "K_eff_vs_L_RVE_over_R_pore.png"
     plt.savefig(img_path, dpi=300)
@@ -212,7 +212,7 @@ def main() -> None:
     plt.grid(True, linestyle="--", alpha=0.5)
     plt.xlabel("Rapporto R_pore / L_voxel")
     plt.ylabel("Conduttività Termica Efficace (K_eff)")
-    plt.title("K_eff vs Risoluzione del Poro (R_pore / L_voxel)")
+    # plt.title("K_eff vs Risoluzione del Poro (R_pore / L_voxel)")
     plt.legend()
     img_path = output_dir / "K_eff_vs_R_pore_over_L_voxel.png"
     plt.savefig(img_path, dpi=300)
@@ -238,7 +238,7 @@ def main() -> None:
     plt.grid(True, linestyle="--", alpha=0.5)
     plt.xlabel("Pore Radius (R_pore)")
     plt.ylabel("Effective Thermal Conductivity (K_eff)")
-    plt.title("K_eff vs Pore Radius")
+    # plt.title("K_eff vs Pore Radius")
     img_path = output_dir / "K_eff_vs_R_pore.png"
     plt.savefig(img_path, dpi=300)
     plt.close()

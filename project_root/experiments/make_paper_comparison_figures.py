@@ -156,7 +156,7 @@ ax1.bar(x[1], thin_p_intra, width=0.55, bottom=thin_p_b,
 ax1.set_xticks(x)
 ax1.set_xticklabels(modes)
 ax1.set_ylabel("Porosity")
-ax1.set_title("Porosity composition")
+# ax1.set_title("Porosity composition")
 ax1.set_ylim(0, 0.30)
 ax1.grid(True, axis="y", linestyle="--", alpha=0.4)
 ax1.legend(loc="upper left", fontsize=9)
@@ -185,7 +185,7 @@ ax2.annotate(f"morph. penalty\n{penalty*100:.1f}%",
 ax2.set_xticks(x)
 ax2.set_xticklabels(modes)
 ax2.set_ylabel(r"$K_{\rm eff}$ (W/m$\cdot$K)")
-ax2.set_title("Effective conductivity: AMITEX vs Loeb baseline")
+# ax2.set_title("Effective conductivity: AMITEX vs Loeb baseline")
 ax2.set_ylim(0, 1.0)
 ax2.grid(True, axis="y", linestyle="--", alpha=0.4)
 ax2.legend(loc="upper right", fontsize=9)
@@ -237,7 +237,7 @@ ax.set_xlim(0.0, 0.30)
 ax.set_ylim(0.4, 1.05)
 ax.grid(True, linestyle="--", alpha=0.4)
 ax.legend(loc="lower left", fontsize=9)
-ax.set_title("Effective thermal conductivity vs porosity")
+# ax.set_title("Effective thermal conductivity vs porosity")
 fig.tight_layout()
 out2 = PAPER_IMG_DIR / "keff_vs_porosity_comparison.png"
 fig.savefig(out2, dpi=200)
@@ -262,15 +262,15 @@ for ax, img, title in [
      f"$r = {inter_match.get('pore_radius', 0):.3f}$)"),
 ]:
     ax.imshow(img, cmap="gray", aspect="equal")
-    ax.set_title(title, fontsize=11)
+    # ax.set_title(title, fontsize=11)
     ax.set_xticks([])
     ax.set_yticks([])
 
 err_pct = 100 * abs(delta_recovered - delta_gt) / delta_gt
-fig.suptitle(
-    f"Known-truth recovery: $\\delta$ recovered within {err_pct:.1f}\\%",
-    fontsize=13,
-)
+# fig.suptitle(
+#     f"Known-truth recovery: $\\delta$ recovered within {err_pct:.1f}\\%",
+#     fontsize=13,
+# )
 fig.tight_layout()
 out3 = PAPER_IMG_DIR / "recovery_test_interconnected.png"
 fig.savefig(out3, dpi=200)

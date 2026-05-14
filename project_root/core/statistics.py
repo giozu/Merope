@@ -368,7 +368,7 @@ def plot_area_distribution(
     ax.set_xlim(x_lo, x_hi)
     ax.set_xlabel(xlabel)
     ax.set_ylabel("Counts (log)")
-    ax.set_title("Pore area distribution: simulation vs experiment")
+    # ax.set_title("Pore area distribution: simulation vs experiment")
     ax.legend(loc="upper right")
     ax.grid(True, which="both", linestyle="--", alpha=0.4)
 

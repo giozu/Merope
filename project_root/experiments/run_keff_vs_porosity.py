@@ -346,7 +346,7 @@ def plot_results(df: pd.DataFrame, output_dir: Path) -> None:
 
     ax1.set_ylabel(r"$K_\mathrm{eff}$ (W/m·K)", fontsize=12)
     ax1.set_xlabel(r"Porosity ($\phi_\mathrm{real}$)", fontsize=12)
-    ax1.set_title("Thermal Conductivity & Analytical Bounds", fontsize=13, fontweight="bold")
+    # ax1.set_title("Thermal Conductivity & Analytical Bounds", fontsize=13, fontweight="bold")
     ax1.legend(fontsize=9, loc="upper right")
     ax1.grid(True, linestyle="--", alpha=0.3)
     ax1.set_ylim(bottom=0.0, top=1.05)
@@ -360,7 +360,7 @@ def plot_results(df: pd.DataFrame, output_dir: Path) -> None:
         ax2.axhline(0, color="grey", linewidth=0.8)
         ax2.set_ylabel(r"Porosity Error $\Delta \phi$", fontsize=12)
         ax2.set_xlabel(r"Target Porosity ($\phi_\mathrm{target}$)", fontsize=12)
-        ax2.set_title("Voxelization Fraction Precision", fontsize=13, fontweight="bold")
+        # ax2.set_title("Voxelization Fraction Precision", fontsize=13, fontweight="bold")
         ax2.legend(fontsize=9)
         ax2.grid(True, linestyle="--", alpha=0.3)
 
@@ -378,7 +378,7 @@ def plot_results(df: pd.DataFrame, output_dir: Path) -> None:
 
     ax3.set_ylabel("Relative Error vs Loeb (%)", fontsize=12)
     ax3.set_xlabel(r"Porosity ($\phi_\mathrm{real}$)", fontsize=12)
-    ax3.set_title("Voxelization/Amitex Converged Error", fontsize=13, fontweight="bold")
+    # ax3.set_title("Voxelization/Amitex Converged Error", fontsize=13, fontweight="bold")
     ax3.legend(fontsize=9, loc="upper left")
     ax3.grid(True, linestyle="--", alpha=0.3)
     ax3.set_ylim(bottom=0.0)
@@ -400,7 +400,7 @@ def plot_results(df: pd.DataFrame, output_dir: Path) -> None:
 
         ax4.set_ylabel("Geometric Ratio", fontsize=12)
         ax4.set_xlabel(r"Target Porosity ($\phi_\mathrm{target}$)", fontsize=12)
-        ax4.set_title("Geometric Criteria & Resolution", fontsize=13, fontweight="bold")
+        # ax4.set_title("Geometric Criteria & Resolution", fontsize=13, fontweight="bold")
         ax4.grid(True, linestyle="--", alpha=0.3)
         ax4.legend(fontsize=8, loc="center right")
         

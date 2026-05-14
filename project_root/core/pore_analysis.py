@@ -454,12 +454,12 @@ def _make_diagnostic_plot(result: Dict, image_path: str, output_dir: Optional[st
     circ_thr     = result["circularity_threshold"]
 
     fig, axes = plt.subplots(2, 3, figsize=(16, 10))
-    fig.suptitle(f"Pore analysis — {Path(image_path).name}", fontsize=13)
+    # fig.suptitle(f"Pore analysis — {Path(image_path).name}", fontsize=13)
 
     # ── Panel 1: original image ──
     ax = axes[0, 0]
     ax.imshow(arr, cmap="gray", vmin=0, vmax=1)
-    ax.set_title("Original (greyscale)")
+    # ax.set_title("Original (greyscale)")
     ax.axis("off")
 
     # ── Panel 2: binary + mask outline ──
@@ -470,10 +470,10 @@ def _make_diagnostic_plot(result: Dict, image_path: str, output_dir: Optional[st
     # Pores in red
     disp[binary, :] = [0.85, 0.15, 0.15]
     ax.imshow(disp)
-    ax.set_title(
-        f"Binarised  ({result['threshold_info']['method']})\n"
-        f"Red = pores  |  green = masked (scale bar)"
-    )
+    # ax.set_title(
+    #     f"Binarised  ({result['threshold_info']['method']})\n"
+    #     f"Red = pores  |  green = masked (scale bar)"
+    # )
     ax.axis("off")
 
     # ── Panel 3: classification map ──
@@ -501,7 +501,7 @@ def _make_diagnostic_plot(result: Dict, image_path: str, output_dir: Optional[st
                             label=f"Intergranular ({result['n_inter']} pores, {result['p_inter']:.1%})")
     ax.legend(handles=[blue_p, red_p], fontsize=8, loc="upper right",
               framealpha=0.8, edgecolor="gray")
-    ax.set_title(f"Classification  (circularity threshold = {circ_thr:.2f})")
+    # ax.set_title(f"Classification  (circularity threshold = {circ_thr:.2f})")
     ax.axis("off")
 
     # ── Panel 4: circularity distribution ──
@@ -514,7 +514,7 @@ def _make_diagnostic_plot(result: Dict, image_path: str, output_dir: Optional[st
                label=f"threshold = {circ_thr}")
     ax.set_xlabel("Pore rank (sorted)")
     ax.set_ylabel("Circularity")
-    ax.set_title("Circularity distribution")
+    # ax.set_title("Circularity distribution")
     ax.legend(fontsize=9)
     ax.grid(alpha=0.3)
     ax.set_ylim(0, 1.05)
@@ -532,7 +532,7 @@ def _make_diagnostic_plot(result: Dict, image_path: str, output_dir: Optional[st
                 label="Intergranular", edgecolor="white", linewidth=0.3)
     ax.set_xlabel("Equivalent circular diameter (µm)")
     ax.set_ylabel("Count")
-    ax.set_title("Pore size distribution (ECD)")
+    # ax.set_title("Pore size distribution (ECD)")
     ax.legend(fontsize=9)
     ax.grid(alpha=0.3)
 

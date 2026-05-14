@@ -171,7 +171,7 @@ def fit_all(df, output_dir):
 
     ax.set_xlabel(r"$\delta^* = \delta / L_{grain}$ (-)")
     ax.set_ylabel(r"$K_{eff}$ (W/m·K)")
-    ax.set_title(r"Sigmoidal Fit: $K_{eff}$ vs $\delta$")
+    # ax.set_title(r"Sigmoidal Fit: $K_{eff}$ vs $\delta$")
     ax.legend()
     ax.grid(True, alpha=0.3)
     
@@ -200,7 +200,7 @@ def plot_parameters(res_df, output_dir):
         poly = np.poly1d(z)
         ax.plot(x, poly(x), "b--", alpha=0.7)
         
-        ax.set_title(f"{p_name} vs porosity")
+        # ax.set_title(f"{p_name} vs porosity")
         ax.set_xlabel("p")
         ax.set_ylabel(p_name)
         
@@ -246,7 +246,7 @@ def plot_contour(res_df, output_dir, LAG_R=1.0):
     fig.colorbar(cp, label=r"$K_{eff}(p, \delta)$")
     ax.set_xlabel("Porosity p")
     ax.set_ylabel(r"$\delta^* = \delta / L_{grain}$ (-)")
-    ax.set_title(r"Contour plot of $K(p, \delta)$")
+    # ax.set_title(r"Contour plot of $K(p, \delta)$")
     
     contour_path = output_dir / "K_eff_Contour.png"
     fig.savefig(contour_path, dpi=300)

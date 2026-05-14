@@ -205,7 +205,7 @@ def plot_anisotropy(df: pd.DataFrame, output_dir: Path) -> None:
 
     ax.set_xlabel(r"Aspect ratio $\gamma$")
     ax.set_ylabel(r"$|K_\mathrm{mean} - K_{yy}| / K_{yy}$ (%)")
-    ax.set_title("Directional anisotropy vs grain aspect ratio")
+    # ax.set_title("Directional anisotropy vs grain aspect ratio")
     ax.grid(True, linestyle="--", alpha=0.4)
     ax.legend()
     fig.tight_layout()
