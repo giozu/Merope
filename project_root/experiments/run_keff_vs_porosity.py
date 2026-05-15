@@ -51,7 +51,7 @@ except ImportError as _import_err:
 # =============================================================================
 L_DIM   = [10.0, 10.0, 10.0]              # RVE size [μm] (cubic). Increased to 15 to ensure L_RVE/R_pore > 20
 SPHERE_R  = 0.3                           # pore radius [same units as L_DIM]
-PHI_VALUES = np.linspace(0.01, 0.30, 20)  # porosity range to simulate
+PHI_VALUES = np.round(np.arange(0.01, 0.31, 0.01), 2)  # 30 cases at 1% spacing, 0.01 → 0.30
 
 SEED = 42  # Added back for repeatability
 
@@ -196,10 +196,10 @@ def recover_results(output_dir: Path) -> pd.DataFrame:
 
 
 def worker(task_args):
-    phi_target, output_dir, no_solver = task_args
+    phi_target, output_dir, no_solver, resume = task_args
     pm = ProjectManager()
     solver = ThermalSolver(n_cpus=2) # 2 cores per simulation
-    
+
     L_RVE = float(L_DIM[0])
     current_n_vox = N_VOX_BASE
 
@@ -215,6 +215,37 @@ def worker(task_args):
         ratio_Rlvox = float(SPHERE_R) / L_voxel
 
         case_dir = output_dir / f"Phi_{phi_target:.4f}_Nvox_{current_n_vox}"
+
+        if resume and (case_dir / "thermalCoeff_amitex.txt").exists():
+            coeffs = np.loadtxt(case_dir / "thermalCoeff_amitex.txt")
+            k_eff = float(np.trace(coeffs) / 3.0) if coeffs.shape == (3, 3) else 0.0
+            analyzer = merope.vox.GridAnalyzer_3D()
+            grid_params = merope.vox.create_grid_parameters_N_L_3D(
+                [current_n_vox] * 3, L_DIM
+            )
+            grid = merope.vox.GridRepresentation_3D(
+                struct, grid_params, merope.vox.VoxelRule.Average
+            )
+            phi_real = analyzer.compute_percentages(grid).get(2, 0.0)
+            k_maxw = float(maxwell_eucken(np.array([phi_real]), K_MAT, K_PORE)[0])
+            k_loeb = float(loeb(np.array([phi_real]), K_MAT)[0])
+            error_perc = abs(k_eff - k_loeb) / k_loeb * 100.0 if k_loeb > 0 else 0.0
+            print(
+                f"   [RESUME N={current_n_vox}] φ_target={phi_target:.3f} | φ_real={phi_real:.4f} | "
+                f"K_sim={k_eff:.4f} | Err={error_perc:.2f}%"
+            )
+            return {
+                "Phi_Target":  phi_target,
+                "Phi_Real":    phi_real,
+                "K_mean":      k_eff,
+                "K_Maxwell":   k_maxw,
+                "K_Loeb":      k_loeb,
+                "Error_Perc":  error_perc,
+                "Ratio_LR":    ratio_LR,
+                "Ratio_Rlvox": ratio_Rlvox,
+                "N_Vox":       current_n_vox,
+            }
+
         case_dir.mkdir(parents=True, exist_ok=True)
 
         with pm.cd(str(case_dir)):
@@ -272,7 +303,7 @@ def worker(task_args):
                 return None
 
 
-def run_simulations(output_dir: Path, no_solver: bool = False) -> pd.DataFrame:
+def run_simulations(output_dir: Path, no_solver: bool = False, resume: bool = False) -> pd.DataFrame:
     """Run Mérope + Amitex for each porosity target and return a DataFrame in parallel."""
     if not _MEROPE_AVAILABLE:
         raise RuntimeError(
@@ -281,15 +312,18 @@ def run_simulations(output_dir: Path, no_solver: bool = False) -> pd.DataFrame:
         )
 
     pm = ProjectManager()
-    pm.cleanup_folder(str(output_dir))
+    if not resume:
+        pm.cleanup_folder(str(output_dir))
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print("=== K_eff vs Porosity – Spherical Inclusions (PARALLEL) ===")
     L_RVE = float(L_DIM[0])
     print(f"    Geometry: R_pore = {SPHERE_R} | L_RVE = {L_RVE}")
     print(f"    Base Resolution: N_vox = {N_VOX_BASE} (Adaptive up to {MAX_N_VOX})")
+    if resume:
+        print("    Resume mode: existing case dirs with thermalCoeff_amitex.txt are reused.")
 
-    tasks = [(p, output_dir, no_solver) for p in PHI_VALUES]
+    tasks = [(p, output_dir, no_solver, resume) for p in PHI_VALUES]
     
     # Use 1 worker for debugging
     # with concurrent.futures.ProcessPoolExecutor(max_workers=1) as executor:
@@ -344,13 +378,13 @@ def plot_results(df: pd.DataFrame, output_dir: Path) -> None:
     ax1.scatter(df["Phi_Real"], df["K_mean"], marker="o", s=60, color="steelblue", 
                 edgecolor="white", zorder=5, label="Mérope + Amitex")
 
-    ax1.set_ylabel(r"$K_\mathrm{eff}$ (W/m·K)", fontsize=12)
+    ax1.set_ylabel(r"$K_\mathrm{eff}$ (W/(m$\cdot$K))", fontsize=12)
     ax1.set_xlabel(r"Porosity ($\phi_\mathrm{real}$)", fontsize=12)
     # ax1.set_title("Thermal Conductivity & Analytical Bounds", fontsize=13, fontweight="bold")
     ax1.legend(fontsize=9, loc="upper right")
     ax1.grid(True, linestyle="--", alpha=0.3)
     ax1.set_ylim(bottom=0.0, top=1.05)
-    ax1.set_xlim(left=0.0)
+    ax1.set_xlim(left=0.0, right=phi_r.max() * 1.02)
 
     # 2. Voxelization Delta: |Phi_Target - Phi_Real| vs Phi_Target
     if "Phi_Target" in df.columns:
@@ -434,14 +468,17 @@ def main() -> None:
     parser.add_argument("--plot-only",  action="store_true", help="Load existing CSV and re-plot (skip simulations).")
     parser.add_argument("--no-solver",  action="store_true", help="Skip Amitex solver (generate geometry only).")
     parser.add_argument("--recover",    action="store_true", help="Recover CSV from existing folders without simulating.")
+    parser.add_argument("--resume",     action="store_true", help="Skip cleanup and reuse case dirs with existing thermalCoeff_amitex.txt; only run missing porosities.")
+    parser.add_argument("--output-dir", type=str, default=str(OUTPUT_DIR), help=f"Override output directory (default: {OUTPUT_DIR}).")
     args = parser.parse_args()
 
-    csv_path = OUTPUT_DIR / "keff_vs_porosity.csv"
+    output_dir = Path(args.output_dir)
+    csv_path = output_dir / "keff_vs_porosity.csv"
 
     if args.recover:
-        df = recover_results(OUTPUT_DIR)
+        df = recover_results(output_dir)
         if not df.empty:
-            plot_results(df, OUTPUT_DIR)
+            plot_results(df, output_dir)
         return
 
     if args.plot_only:
@@ -463,14 +500,14 @@ def main() -> None:
                 df["Ratio_LR"] = L_RVE / float(SPHERE_R)
                 df["Ratio_Rlvox"] = float(SPHERE_R) / (L_RVE / df["N_Vox"])
     else:
-        df = run_simulations(OUTPUT_DIR, no_solver=args.no_solver)
+        df = run_simulations(output_dir, no_solver=args.no_solver, resume=args.resume)
 
     # If simulations produced no valid rows, skip plotting gracefully
     if df is None or df.empty:
         print("No results to plot.")
         return
 
-    plot_results(df, OUTPUT_DIR)
+    plot_results(df, output_dir)
 
 
 if __name__ == "__main__":

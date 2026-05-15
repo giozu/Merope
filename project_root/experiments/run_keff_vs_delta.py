@@ -386,12 +386,13 @@ def plot_slide(df, output_dir):
     colors   = {0.1: "steelblue", 0.2: "darkorange", 0.3: "forestgreen"}
     p_labels = {0.1: "0.1",       0.2: "0.2",        0.3: "0.3"}
 
-    delta_fine = np.linspace(df["Delta"].min() * 0.5, df["Delta"].max() * 1.05, 400)
+    k0 = float(K_THERMAL[0])  # matrix conductivity, used to render the dimensionless K_eff/K_0
+    delta_fine = np.linspace(df["Delta"].min() * 0.5, df["Delta"].max() * 1.05, 400) / LAG_R
 
     for p, group in df.groupby("Target_P"):
         col = colors.get(p, "black")
-        x   = group["Delta"].values
-        y   = group["K_eff"].values
+        x   = group["Delta"].values / LAG_R
+        y   = group["K_eff"].values / k0
 
         # Scatter: Data points
         ax.scatter(x, y, s=40, color=col, alpha=0.85, zorder=3,
@@ -413,20 +414,19 @@ def plot_slide(df, output_dir):
         except Exception as e:
             print(f"  [fit warning p={p}] {e}")
 
-    # Geometric limit: vertical lines at delta_crit for each P_target
+    # Geometric lower bound on delta*: minimum band thickness that can host porosity p
     for p in sorted(df["Target_P"].unique()):
-        delta_crit = LAG_R * (1 - (1 - p)**(1/3))
+        delta_crit_star = 1 - (1 - p)**(1/3)
         col = colors.get(p, "black")
-        ax.axvline(delta_crit, color=col, linestyle=":", linewidth=1.2, alpha=0.6)
-        ax.text(delta_crit + 0.01, 0.98, rf"$\delta_{{crit}}^{{p={p:.1f}}}$",
+        ax.axvline(delta_crit_star, color=col, linestyle=":", linewidth=1.2, alpha=0.6)
+        ax.text(delta_crit_star + 0.01, 0.98, rf"$\delta_{{crit}}^{{*,\,p={p:.1f}}}$",
                 color=col, fontsize=8, va="top", transform=ax.get_xaxis_transform())
 
-    ax.set_xlabel(r"$\delta$", fontsize=12)
-    ax.set_ylabel(r"$K_{eff}$ [W/mK]", fontsize=12)
-    # ax.set_title(r"$K_\mathrm{eff}$ vs $\delta$ — crack-to-sphere transition", fontsize=13)
+    ax.set_xlabel(r"$\delta^* = \delta / L_\mathrm{grain}$", fontsize=12)
+    ax.set_ylabel(r"$K_\mathrm{eff} / K_0$", fontsize=12)
     ax.grid(True, linestyle="--", alpha=0.4, color="grey")
-    ax.set_xlim(0, df["Delta"].max() * 1.05)
-    ax.set_ylim(max(0.0, df["K_eff"].min() - 0.05), 1.05)
+    ax.set_xlim(0, df["Delta"].max() / LAG_R * 1.05)
+    ax.set_ylim(max(0.0, df["K_eff"].min() / k0 - 0.05), 1.05)
     ax.legend(fontsize=9, loc="lower right", framealpha=0.9)
 
     fig.tight_layout()
