@@ -824,7 +824,11 @@ def main() -> None:
             plot_area_distribution(
                 best_slice_path, exp_image, dist_path,
                 exp_um_per_px=real_um_per_px,
-                sim_um_per_px=sim_um_per_px / 4,  # plot_area_distribution handles sim_upscale_factor (default 4) manually?
+                # best_slice.png is the 4x-upscaled slice; plot_area_distribution
+                # divides its areas by sim_upscale_factor**2 to return to voxel space,
+                # so the scale here must be the VOXEL-space um/px (= 10/n3d),
+                # i.e. sim_um_per_px * 4 (sim_um_per_px is per upscaled pixel).
+                sim_um_per_px=sim_um_per_px * 4,
                 sim_upscale_factor=4
             )
             print(f"  Area distribution plot → {dist_path}")

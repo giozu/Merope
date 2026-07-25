@@ -228,7 +228,7 @@ ax.annotate("",
             arrowprops=dict(arrowstyle="->", lw=1.4, color="darkorange"))
 penalty_pct = 100 * (loeb_at_thin - thin["Kmean"]) / loeb_at_thin
 ax.text(thin_p_total - 0.04, 0.5 * (loeb_at_thin + thin["Kmean"]),
-        f"{penalty_pct:.0f}% drop\nbelow Loeb",
+        f"{penalty_pct:.1f}% drop\nbelow Loeb",
         fontsize=10, color="darkorange", va="center", ha="right")
 
 ax.set_xlabel(r"Porosity $p$")

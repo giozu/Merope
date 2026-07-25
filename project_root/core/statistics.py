@@ -356,7 +356,7 @@ def plot_area_distribution(
     fig, ax = plt.subplots(figsize=(9, 6))
     # Experimental first (typically more populated), simulated overlaid on top
     # so the smaller distribution stays visible.
-    ax.hist(areas_exp_um2, bins=bins, alpha=0.7, log=True, label="Experimental",
+    ax.hist(areas_exp_um2, bins=bins, alpha=0.7, log=True, label="Target",
             color="darkorange", edgecolor="black", linewidth=0.4)
     ax.hist(areas_sim_um2, bins=bins, alpha=0.7, log=True, label="Simulated slice",
             color="steelblue", edgecolor="black", linewidth=0.4)
@@ -365,7 +365,10 @@ def plot_area_distribution(
                label=f"Threshold ({thr_um2:.2g} µm²)" if use_physical
                      else f"Threshold ({area_threshold} px²)")
     ax.set_xscale("log")
-    ax.set_xlim(x_lo, x_hi)
+    # Keep the noise-exclusion threshold line visible: if the data start right at
+    # (or above) the threshold, pad the left limit a little below it.
+    x_lo_plot = min(x_lo, thr_um2 * 0.85) if use_physical else x_lo
+    ax.set_xlim(x_lo_plot, x_hi)
     ax.set_xlabel(xlabel)
     ax.set_ylabel("Counts (log)")
     # ax.set_title("Pore area distribution: simulation vs experiment")
@@ -376,7 +379,7 @@ def plot_area_distribution(
         ax2 = ax.twiny()
         ax2.set_xscale("log")
         ax2.set_xlim(np.array(ax.get_xlim()) / exp_um_per_px ** 2)
-        ax2.set_xlabel("Pore area [pixel² — exp. scale]", fontsize=9, color="gray")
+        ax2.set_xlabel("Pore area [pixel² — target scale]", fontsize=9, color="gray")
         ax2.tick_params(axis="x", labelsize=8, colors="gray")
 
     plt.tight_layout()
